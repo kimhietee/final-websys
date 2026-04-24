@@ -14,29 +14,42 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = trim($_POST['email'] ?? '');
-    $password = $_POST['password'] ?? '';
+// if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+//     $email    = trim($_POST['email'] ?? '');
+//     $password = $_POST['password'] ?? '';
 
-    if (!$email || !$password) {
-        $error = 'Please fill in all fields.';
-    } else {
-        // SELECT user by email
-        $stmt = $pdo->prepare("SELECT user_id, email, username, password FROM users WHERE email = ?");
-        $stmt->execute([strtolower($email)]);
-        $user = $stmt->fetch();
+//     if (!$email || !$password) {
+//         $error = 'Please fill in all fields.';
+//     } else {
+//         // SELECT user by email
+//         $stmt = $pdo->prepare("SELECT user_id, email, username, password FROM users WHERE email = ?");
+//         $stmt->execute([strtolower($email)]);
+//         $user = $stmt->fetch();
 
-        if ($user && password_verify($password, $user['password'])) {
-            // Set session
-            $_SESSION['user_id']  = $user['user_id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['email']    = $user['email'];
-            header('Location: dashboard.php');
-            exit;
-        } else {
-            $error = 'Invalid email or password. Please try again.';
-        }
-    }
+//         if ($user && password_verify($password, $user['password'])) {
+//             // Set session
+//             $_SESSION['user_id']  = $user['user_id'];
+//             $_SESSION['username'] = $user['username'];
+//             $_SESSION['email']    = $user['email'];
+//             header('Location: dashboard.php');
+//             exit;
+//         } else {
+//             $error = 'Invalid email or password. Please try again.';
+//         }
+//     }
+// }
+
+include 'db_connect.php';
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+// $field1 = $_POST['?'];
+$email = $_POST['email'];
+$username = $_POST['username'];
+$password = $_POST['password'];
+$sql_query = "INSERT INTO users ($email, $username, $password) VALUES
+(email, username, password)";
+if ($conn->query($sql_query) === TRUE) {
+echo "Record inserted successfully";
+}
 }
 ?>
 <!DOCTYPE html>

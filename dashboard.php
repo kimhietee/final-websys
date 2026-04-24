@@ -3,6 +3,60 @@
  * KIM INVENTORIES — dashboard.php
  * Dashboard with stats, recent products, and category breakdown from MySQL.
  */
+$db_name = "kim_inventories";
+$conn = new mysqli("localhost", "root", "", $db_name);
+
+if ($conn->connect_error)
+    die("Connection failed: " . $conn->connect_error);
+
+// else
+  // {
+  //   // Run the SQL command to list tables
+  //   $sql = "SHOW TABLES";
+  //   $result = $conn->query($sql);
+
+  //   if ($result->num_rows > 0) {
+  //       echo "<h3>Tables in $db_name:</h3><ul>";
+  //       // fetch_array returns each row as a numeric array
+  //       while($row = $result->fetch_array()) {
+  //           echo "<li>" . $row[0] . "</li>";
+  //       }
+  //       echo "</ul>";
+  //   } else {
+  //       echo "The database is empty (no tables found).";
+  //   }
+
+    // $table = "products"; // Change this to your actual table name
+    // $result = $conn->query("DESCRIBE $table");
+
+    // echo "<h3>Attributes of $table:</h3><table border='1'><tr><th>Field</th><th>Type</th><th>Null</th></tr>";
+    // while($row = $result->fetch_assoc()) {
+    //     echo "<tr><td>{$row['Field']}</td><td>{$row['Type']}</td><td>{$row['Null']}</td></tr>";
+    // }
+    // echo "</table>";
+
+
+    // $table = "users"; // Change this to your actual table name
+    // $result = $conn->query("DESCRIBE $table");
+
+    // echo "<h3>Attributes of $table:</h3><table border='1'><tr><th>Field</th><th>Type</th><th>Null</th></tr>";
+    // while($row = $result->fetch_assoc()) {
+    //     echo "<tr><td>{$row['Field']}</td><td>{$row['Type']}</td><td>{$row['Null']}</td></tr>";
+    // }
+    // echo "</table>";
+
+
+    // $table = "category"; // Change this to your actual table name
+    // $result = $conn->query("DESCRIBE $table");
+
+    // echo "<h3>Attributes of $table:</h3><table border='1'><tr><th>Field</th><th>Type</th><th>Null</th></tr>";
+    // while($row = $result->fetch_assoc()) {
+    //     echo "<tr><td>{$row['Field']}</td><td>{$row['Type']}</td><td>{$row['Null']}</td></tr>";
+    // }
+    // echo "</table>";
+    // die();
+// }
+
 session_start();
 require_once 'db_connect.php';
 
