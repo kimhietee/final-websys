@@ -326,31 +326,34 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     </form>
   </div>
 </div>
-
 <!-- ===== CATEGORY MODAL ===== -->
 <div class="modal-overlay" id="categoryModal">
-  <div class="modal-box" style="max-width:400px;">
+  <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title">Add Category</div>
       <button class="modal-close" onclick="closeCategoryModal()">&times;</button>
     </div>
 
-    <form method="POST" action="products.php">
+    <form class="modal-form" method="POST" action="products.php" novalidate>
       <input type="hidden" name="action" value="add_category">
 
       <div class="form-group">
-        <label>Category Name</label>
-        <input type="text" name="category_name" placeholder="e.g. Drinks" required>
+        <label for="catName">Category Name</label>
+        <input type="text" id="catName" name="category_name" placeholder="e.g. Drinks" required>
       </div>
+
+      <!-- (Optional but keeps design identical to product modal) -->
+      <div class="alert-msg alert-error" id="categoryError"></div>
 
       <div class="modal-actions">
         <button type="button" class="btn-cancel-sm" onclick="closeCategoryModal()">Cancel</button>
-        <button type="submit" class="btn-primary-green">Save</button>
+        <button type="submit" class="btn-primary-green" style="border-radius:var(--radius-sm);padding:9px 22px;">
+          Save Category
+        </button>
       </div>
     </form>
   </div>
 </div>
-
 <!-- Toast -->
 <div class="toast-notif" id="toastNotif"></div>
 
@@ -430,6 +433,21 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     }
   });
 
+  // category validation
+  document.querySelector('#categoryModal form').addEventListener('submit', function(e) {
+      var name = document.getElementById('catName').value.trim();
+      var errorEl = document.getElementById('categoryError');
+
+      errorEl.style.display = 'none';
+
+      if (!name) {
+        e.preventDefault();
+        errorEl.textContent = 'Please fill in all required fields with valid values.';
+        errorEl.style.display = 'block';
+        return;
+      }
+    });
+
   // ─── Delete Modal ──────────────────────────────────────────────────────────
   function openDeleteModal(id, name) {
     document.getElementById('deleteProductId').value        = id;
@@ -456,6 +474,9 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   });
   document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeDeleteModal();
+  });
+  document.getElementById('categoryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCategoryModal();
   });
 
   // ─── Show toast if redirected with message ─────────────────────────────────
