@@ -5,6 +5,7 @@
  */
 session_start();
 require_once 'db_connect.php';
+require_once 'constants.php';
 
 // Auth guard
 if (!isset($_SESSION['user_id'])) {
@@ -25,7 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $quantity   = (int)($_POST['quantity'] ?? 0);
 
         if ($name && $categoryId > 0 && $price >= 0 && $quantity >= 0) {
-            $stmt = $conn->prepare("INSERT INTO products (user_id, category_id, product_name, price, quantity) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("
+                INSERT INTO products (user_id, category_id, product_name, price, quantity) 
+                VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("iisdi", $userId, $categoryId, $name, $price, $quantity);
             $stmt->execute();
             $_SESSION['toast'] = 'Product added successfully!';
@@ -39,7 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $quantity   = (int)($_POST['quantity'] ?? 0);
 
         if ($productId > 0 && $name && $categoryId > 0) {
-            $stmt = $conn->prepare("UPDATE products SET product_name = ?, category_id = ?, price = ?, quantity = ? WHERE product_id = ? AND user_id = ?");
+            $stmt = $conn->prepare("
+                UPDATE products SET product_name = ?, category_id = ?, price = ?, quantity = ? 
+                WHERE product_id = ? AND user_id = ?");
             $stmt->bind_param("ssdiii", $name, $categoryId, $price, $quantity, $productId, $userId);
             $stmt->execute();
             $_SESSION['toast'] = 'Product updated successfully!';
@@ -52,6 +57,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt->bind_param("ii", $productId, $userId);
             $stmt->execute();
             $_SESSION['toast'] = 'Product deleted.';
+        }
+    }
+    elseif ($action == 'add_category') {
+        $name = trim($_POST['category_name'] ?? '');
+
+        if ($name) {
+
+            // check if category already exists
+            $check = $conn->prepare("SELECT category_id FROM category WHERE category_name = ?");
+            $check->bind_param("s", $name);
+            $check->execute();
+            $result = $check->get_result();
+
+            if ($result->num_rows > 0) {
+                $_SESSION['toast'] = 'Category already exists!';
+            } else {
+                $stmt = $conn->prepare("INSERT INTO category (category_name) VALUES (?)");
+                $stmt->bind_param("s", $name);
+                $stmt->execute();
+
+                $_SESSION['toast'] = 'Category added!';
+            }
         }
     }
 
@@ -130,13 +157,20 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   <!-- ===== MAIN CONTENT ===== -->
   <main class="main-content">
 
-    <!-- Page Header -->
+    <!-- Page Header  (add product and category-->
     <div class="page-header-row">
-      <h1 class="page-title">Products</h1>
+    <h1 class="page-title">Products</h1>
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn-primary-green" onclick="openCategoryModal()" style="background:#6c8f4e;">
+        <i class="bi bi-tags"></i> Add Category
+      </button>
+
       <button class="btn-primary-green" onclick="openAddModal()">
         <i class="bi bi-plus-lg"></i> Add Product
       </button>
     </div>
+  </div>
 
     <!-- Filter Bar -->
     <div class="filter-bar">
@@ -181,7 +215,7 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
               <?php
                 $qty = (int)$p['quantity'];
                 if ($qty === 0)    { $status = 'out-of-stock'; $badgeCls = 'badge-out-stock'; $badgeTxt = 'Out of Stock'; }
-                elseif ($qty < 10) { $status = 'low-stock';    $badgeCls = 'badge-low-stock'; $badgeTxt = 'Low Stock'; }
+                elseif ($qty < LOW_STOCK_THRESHOLD) { $status = 'low-stock';    $badgeCls = 'badge-low-stock'; $badgeTxt = 'Low Stock'; }
                 else               { $status = 'in-stock';     $badgeCls = 'badge-in-stock';  $badgeTxt = 'In Stock'; }
               ?>
               <tr data-name="<?= htmlspecialchars(strtolower($p['product_name'])) ?>"
@@ -293,6 +327,30 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   </div>
 </div>
 
+<!-- ===== CATEGORY MODAL ===== -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Add Category</div>
+      <button class="modal-close" onclick="closeCategoryModal()">&times;</button>
+    </div>
+
+    <form method="POST" action="products.php">
+      <input type="hidden" name="action" value="add_category">
+
+      <div class="form-group">
+        <label>Category Name</label>
+        <input type="text" name="category_name" placeholder="e.g. Drinks" required>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel-sm" onclick="closeCategoryModal()">Cancel</button>
+        <button type="submit" class="btn-primary-green">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast-notif" id="toastNotif"></div>
 
@@ -381,6 +439,15 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 
   function closeDeleteModal() {
     document.getElementById('deleteModal').classList.remove('active');
+  }
+
+  // ─── category modal ──────────────────────────────────────────────────────────
+  function openCategoryModal() {
+  document.getElementById('categoryModal').classList.add('active');
+  }
+
+  function closeCategoryModal() {
+    document.getElementById('categoryModal').classList.remove('active');
   }
 
   // Close modal on overlay click

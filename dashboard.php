@@ -11,6 +11,7 @@
 
 session_start();
 require_once 'db_connect.php';
+require_once 'constants.php';
 
 // Auth guard
 if (!isset($_SESSION['user_id'])) {
@@ -27,7 +28,7 @@ $username = $_SESSION['username'];
 //         COALESCE(SUM(quantity), 0) AS total_stock,
 //         COALESCE(SUM(price * quantity), 0) AS total_value,
 //         SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock,
-//         SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
+//         SUM(CASE WHEN quantity = 0 THEx  N 1 ELSE 0 END) AS out_of_stock
 //     FROM products WHERE user_id = ?
 // ");
 
@@ -35,7 +36,7 @@ $stmt = $conn->prepare("
                         SELECT 
                               COALESCE(SUM(quantity),0) AS total_stock, 
                               COALESCE(SUM(price*quantity),0) AS total_value, 
-                              SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock, 
+                              SUM(CASE WHEN quantity > 0 AND quantity < " . LOW_STOCK_THRESHOLD .  " THEN 1 ELSE 0 END) AS low_stock, 
                               SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
                         FROM products WHERE user_id = ?
                         ");
