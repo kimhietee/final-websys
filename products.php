@@ -1,7 +1,7 @@
 <?php
 /**
  * KIM INVENTORIES — products.php
- * Full CRUD: SELECT all products, INSERT new, UPDATE existing, DELETE.
+ * Create (INSERT) and Read (SELECT) operations on products table.
  */
 session_start();
 require_once 'db_connect.php';
@@ -13,19 +13,8 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userId = $_SESSION['user_id'];
-$toastMsg = '';
 
 // ─── Handle POST actions ────────────────────────────────────────────────────
-// include 'db_connect.php';
-// $sql_query = "SELECT * FROM products";
-// $result = $conn->query($sql_query);
-// if ($result->num_rows > 0) {
-// while($row = $result->fetch_assoc()) {
-// echo $row['product_name'] . "<br>";
-// // ????
-// }
-// }
-
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -70,92 +59,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-
-// if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-//     $action = $_POST['action'] ?? '';
-
-//     if ($action === 'add') {
-//         // INSERT new product
-//         $name       = trim($_POST['product_name'] ?? '');
-//         $categoryId = (int)($_POST['category_id'] ?? 0);
-//         $price      = floatval($_POST['price'] ?? 0);
-//         $quantity   = (int)($_POST['quantity'] ?? 0);
-//         $unit       = trim($_POST['unit'] ?? '');
-
-//         if ($name && $categoryId > 0 && $price >= 0 && $quantity >= 0) {
-//             $stmt = $pdo->prepare("INSERT INTO products (user_id, category_id, product_name, price, quantity, unit) VALUES (?, ?, ?, ?, ?, ?)");
-//             $stmt->execute([$userId, $categoryId, $name, $price, $quantity, $unit]);
-//             $toastMsg = 'Product added successfully!';
-//         }
-//     }
-//     elseif ($action === 'edit') {
-//         // UPDATE existing product
-//         $productId  = (int)($_POST['product_id'] ?? 0);
-//         $name       = trim($_POST['product_name'] ?? '');
-//         $categoryId = (int)($_POST['category_id'] ?? 0);
-//         $price      = floatval($_POST['price'] ?? 0);
-//         $quantity   = (int)($_POST['quantity'] ?? 0);
-//         $unit       = trim($_POST['unit'] ?? '');
-
-//         if ($productId > 0 && $name && $categoryId > 0) {
-//             $stmt = $pdo->prepare("UPDATE products SET product_name = ?, category_id = ?, price = ?, quantity = ?, unit = ? WHERE product_id = ? AND user_id = ?");
-//             $stmt->execute([$name, $categoryId, $price, $quantity, $unit, $productId, $userId]);
-//             $toastMsg = 'Product updated successfully!';
-//         }
-//     }
-//     elseif ($action === 'delete') {
-//         // DELETE product
-//         $productId = (int)($_POST['product_id'] ?? 0);
-//         if ($productId > 0) {
-//             $stmt = $pdo->prepare("DELETE FROM products WHERE product_id = ? AND user_id = ?");
-//             $stmt->execute([$productId, $userId]);
-//             $toastMsg = 'Product deleted.';
-//         }
-//     }
-
-//     // PRG pattern: redirect to avoid form resubmission
-//     if ($toastMsg) {
-//         $_SESSION['toast'] = $toastMsg;
-//     }
-//     header('Location: products.php');
-//     exit;
-// }
-
 // Check for toast message from redirect
 $toast = '';
 if (isset($_SESSION['toast'])) {
     $toast = $_SESSION['toast'];
     unset($_SESSION['toast']);
-// }
+}
 
 // ─── SELECT all products with category names ─────────────────────────────────
-// $stmt = $pdo->prepare("
-//     SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity, p.unit
-//     FROM products p
-//     JOIN category c ON p.category_id = c.category_id
-//     WHERE p.user_id = ?
-//     ORDER BY p.product_id ASC
-// ");
-// $stmt->execute([$userId]);
-// $products = $stmt->fetchAll();
-
 $stmt = $conn->prepare("
-    SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity FROM products p 
-    JOIN category c ON p.category_id = c.category_id 
-    WHERE p.user_id = ? 
+    SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity
+    FROM products p
+    JOIN category c ON p.category_id = c.category_id
+    WHERE p.user_id = ?
     ORDER BY p.product_id ASC
 ");
 $stmt->bind_param("i", $userId);
 $stmt->execute();
 $products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// ─── SELECT all categories for dropdowns ─────────────────────────────────────
-// $categories = $pdo->query("SELECT category_id, category_name FROM category ORDER BY category_id")->fetchAll();
-
-$result = $conn->query("
-    SELECT category_id, category_name FROM category 
-    ORDER BY category_id
-");
+// ─── SELECT all categories for dropdown ──────────────────────────────────────
+$result = $conn->query("SELECT category_id, category_name FROM category ORDER BY category_id");
 $categories = $result->fetch_all(MYSQLI_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -267,17 +191,16 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
                 <td class="product-name"><?= htmlspecialchars($p['product_name']) ?></td>
                 <td><?= htmlspecialchars($p['category_name']) ?></td>
                 <td class="product-price">₱<?= number_format($p['price'], 0) ?></td>
-                <td><?= $qty ?> <span style="font-size:11px;color:var(--text-light);"><?= htmlspecialchars($p['unit']) ?></span></td>
+                <td><?= $qty ?></td>
                 <td><span class="badge-status <?= $badgeCls ?>"><?= $badgeTxt ?></span></td>
                 <td>
                   <div class="td-actions">
                     <button class="btn-edit" onclick='openEditModal(<?= json_encode([
-                        "id" => $p["product_id"],
-                        "name" => $p["product_name"],
+                        "id"          => $p["product_id"],
+                        "name"        => $p["product_name"],
                         "category_id" => $p["category_id"],
-                        "price" => $p["price"],
-                        "quantity" => $p["quantity"],
-                        // "unit" => $p["unit"]
+                        "price"       => $p["price"],
+                        "quantity"    => $p["quantity"]
                     ]) ?>)'>
                       <i class="bi bi-pencil"></i> Edit
                     </button>
@@ -325,10 +248,6 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
             <?php endforeach; ?>
           </select>
         </div>
-        <!-- <div class="form-group">
-          <label for="prodUnit">Unit</label>
-          <input type="text" id="prodUnit" name="unit" placeholder="e.g. piece, cup" />
-        </div> -->
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -412,7 +331,7 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   function openAddModal() {
     document.getElementById('modalTitle').textContent = 'Add Product';
     document.getElementById('formAction').value       = 'add';
-    document.getElementById('editId').value            = '';
+    document.getElementById('editId').value           = '';
     document.getElementById('productForm').reset();
     document.getElementById('modalError').style.display = 'none';
     document.getElementById('productModal').classList.add('active');
@@ -420,15 +339,14 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 
   // ─── Edit Modal ────────────────────────────────────────────────────────────
   function openEditModal(product) {
-    document.getElementById('modalTitle').textContent   = 'Edit Product';
-    document.getElementById('formAction').value         = 'edit';
-    document.getElementById('editId').value              = product.id;
-    document.getElementById('prodName').value            = product.name;
-    document.getElementById('prodCategory').value        = product.category_id;
-    //document.getElementById('prodUnit').value            = product.unit || '';
-    document.getElementById('prodPrice').value           = product.price;
-    document.getElementById('prodQty').value             = product.quantity;
-    document.getElementById('modalError').style.display  = 'none';
+    document.getElementById('modalTitle').textContent  = 'Edit Product';
+    document.getElementById('formAction').value        = 'edit';
+    document.getElementById('editId').value            = product.id;
+    document.getElementById('prodName').value          = product.name;
+    document.getElementById('prodCategory').value      = product.category_id;
+    document.getElementById('prodPrice').value         = product.price;
+    document.getElementById('prodQty').value           = product.quantity;
+    document.getElementById('modalError').style.display = 'none';
     document.getElementById('productModal').classList.add('active');
   }
 
@@ -452,12 +370,11 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
       errorEl.style.display = 'block';
       return;
     }
-    // Form will submit normally to PHP
   });
 
   // ─── Delete Modal ──────────────────────────────────────────────────────────
   function openDeleteModal(id, name) {
-    document.getElementById('deleteProductId').value       = id;
+    document.getElementById('deleteProductId').value        = id;
     document.getElementById('deleteProductName').textContent = name;
     document.getElementById('deleteModal').classList.add('active');
   }

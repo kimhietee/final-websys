@@ -42,8 +42,8 @@ $stmt = $conn->prepare("
 $stmt->bind_param("i", $userId);
 $stmt->execute();
 $s = $stmt->get_result()->fetch_assoc();
-$stats->execute([$userId]);
-$s = $stats->fetch();
+// $stats->execute([$userId]);
+// $s = $stats->fetch();
 
 // ─── SELECT recent 6 products ────────────────────────────────────────────────
 // $recent = $pdo->prepare("

@@ -36,8 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 }
-
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -83,8 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <form class="auth-form" id="loginForm" method="POST" action="login.php" novalidate autocomplete="on">
       <div class="form-group">
         <label for="loginUser">Username</label>
-        <input type="email" id="loginUser" name="email"
-               placeholder="Enter your username required autocomplete="username"
+        <input type="text" id="loginUser" name="username"
+               placeholder="Enter your username" required autocomplete="username"
                value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" />
       </div>
       <div class="form-group">
@@ -97,12 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <div class="auth-link">
       Don't have an account? <a href="register.php">Create one</a>
-    </div>
-
-    <!-- Test credentials hint -->
-    <div class="test-hint">
-      <strong>Test Credentials:</strong><br>
-      admin@kiminventories.com &nbsp;/&nbsp; admin123
     </div>
 
   </div><!-- /.auth-card -->

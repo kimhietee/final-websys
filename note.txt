@@ -1,0 +1,14 @@
+TASKS
+
+
+.html files are replaced by .php, will delete soon
+focus on CREATE and INSERT
+DELETE and UPDATE could work
+tables fully working
+review every .php file for final output
+front-end can be improved
+database relationships fully working 
+followed 1NF, 2NF and 3NF normal forms (not 100% sure, need testing)
+git implemented for debugging
+
+END

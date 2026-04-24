@@ -14,6 +14,7 @@ if (isset($_SESSION['user_id'])) {
 
 $error   = '';
 $success = '';
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $username = trim($_POST['username'] ?? '');
     $email    = trim($_POST['email'] ?? '');
@@ -27,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } elseif ($password !== $confirm) {
         $error = 'Passwords do not match.';
     } else {
+        // Check if username already exists
         $stmt = $conn->prepare("SELECT user_id FROM users WHERE username = ?");
         $stmt->bind_param("s", $username);
         $stmt->execute();
@@ -34,15 +36,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($stmt->num_rows > 0) {
             $error = 'Username already taken. Please choose another.';
         } else {
-            $hashedPw = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $conn->prepare("INSERT INTO users (email, username, password) VALUES (?, ?, ?)");
-            $stmt->bind_param("sss", $email, $username, $hashedPw);
-            $stmt->execute();
-            $success = 'Account created! Redirecting to login…';
+            // Check if email already exists
+            $stmt2 = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+            $stmt2->bind_param("s", $email);
+            $stmt2->execute();
+            $stmt2->store_result();
+            if ($stmt2->num_rows > 0) {
+                $error = 'Email already in use. Please use another.';
+            } else {
+                // Insert new user
+                $hashedPw = password_hash($password, PASSWORD_DEFAULT);
+                $stmt3 = $conn->prepare("INSERT INTO users (email, username, password) VALUES (?, ?, ?)");
+                $stmt3->bind_param("sss", $email, $username, $hashedPw);
+                $stmt3->execute();
+                $success = 'Account created! Redirecting to login…';
+            }
         }
     }
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">

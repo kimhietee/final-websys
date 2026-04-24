@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
 
-    
+
     $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM products WHERE user_id = ?");
     $stmt->bind_param("i", $userId);
     $stmt->execute();
@@ -88,9 +88,13 @@ if (isset($_SESSION['toast'])) {
 }
 
 // ─── SELECT user data ────────────────────────────────────────────────────────
-$stmt = $pdo->prepare("SELECT user_id, email, username, created_at FROM users WHERE user_id = ?");
-$stmt->execute([$userId]);
-$user = $stmt->fetch();
+// $stmt = $pdo->prepare("SELECT user_id, email, username, created_at FROM users WHERE user_id = ?");
+// $stmt->execute([$userId]);
+// $user = $stmt->fetch();
+$stmt = $conn->prepare("SELECT user_id, email, username, created_at FROM users WHERE user_id = ?");
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$user = $stmt->get_result()->fetch_assoc();
 
 $displayName  = $user['username'] ?? '—';
 $displayEmail = $user['email'] ?? '—';
@@ -225,13 +229,22 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
 
           <!-- Account Stats -->
           <?php
-            $prodCount = $pdo->prepare("SELECT COUNT(*) FROM products WHERE user_id = ?");
-            $prodCount->execute([$userId]);
-            $totalProducts = $prodCount->fetchColumn();
+            // $prodCount = $pdo->prepare("SELECT COUNT(*) FROM products WHERE user_id = ?");
+            // $prodCount->execute([$userId]);
+            // $totalProducts = $prodCount->fetchColumn();
 
-            $totalStock = $pdo->prepare("SELECT COALESCE(SUM(quantity), 0) FROM products WHERE user_id = ?");
-            $totalStock->execute([$userId]);
-            $stockTotal = $totalStock->fetchColumn();
+            // $totalStock = $pdo->prepare("SELECT COALESCE(SUM(quantity), 0) FROM products WHERE user_id = ?");
+            // $totalStock->execute([$userId]);
+            // $stockTotal = $totalStock->fetchColumn();
+            $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM products WHERE user_id = ?");
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $totalProducts = $stmt->get_result()->fetch_assoc()['cnt'];
+
+            $stmt = $conn->prepare("SELECT COALESCE(SUM(quantity), 0) AS total FROM products WHERE user_id = ?");
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $stockTotal = $stmt->get_result()->fetch_assoc()['total'];
           ?>
           <div style="margin-top:20px; padding-top:16px; border-top:1px dashed var(--border-color);">
             <div class="field-label" style="margin-bottom:12px;">Account Summary</div>
