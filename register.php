@@ -14,35 +14,35 @@ if (isset($_SESSION['user_id'])) {
 
 $error   = '';
 $success = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $username = trim($_POST['username'] ?? '');
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm  = $_POST['confirm_password'] ?? '';
 
-    // Validation
     if (!$username || !$email || !$password || !$confirm) {
         $error = 'Please fill in all fields.';
     } elseif (strlen($password) < 6) {
         $error = 'Password must be at least 6 characters long.';
     } elseif ($password !== $confirm) {
-        $error = 'Passwords do not match. Please try again.';
+        $error = 'Passwords do not match.';
     } else {
-        // Check if email already exists (SELECT)
-        $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = ?");
-        $stmt->execute([strtolower($email)]);
-        if ($stmt->fetch()) {
-            $error = 'An account with this email already exists.';
+        $stmt = $conn->prepare("SELECT user_id FROM users WHERE username = ?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $stmt->store_result();
+        if ($stmt->num_rows > 0) {
+            $error = 'Username already taken. Please choose another.';
         } else {
-            // INSERT new user
             $hashedPw = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO users (email, username, password) VALUES (?, ?, ?)");
-            $stmt->execute([strtolower($email), $username, $hashedPw]);
+            $stmt = $conn->prepare("INSERT INTO users (email, username, password) VALUES (?, ?, ?)");
+            $stmt->bind_param("sss", $email, $username, $hashedPw);
+            $stmt->execute();
             $success = 'Account created! Redirecting to login…';
         }
     }
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="en">

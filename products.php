@@ -16,14 +16,58 @@ $userId = $_SESSION['user_id'];
 $toastMsg = '';
 
 // ─── Handle POST actions ────────────────────────────────────────────────────
-include 'db_connect.php';
-$sql_query = "SELECT * FROM products";
-$result = $conn->query($sql_query);
-if ($result->num_rows > 0) {
-while($row = $result->fetch_assoc()) {
-echo $row['product_name'] . "<br>";
-// ????
-}
+// include 'db_connect.php';
+// $sql_query = "SELECT * FROM products";
+// $result = $conn->query($sql_query);
+// if ($result->num_rows > 0) {
+// while($row = $result->fetch_assoc()) {
+// echo $row['product_name'] . "<br>";
+// // ????
+// }
+// }
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action == 'add') {
+        $name       = trim($_POST['product_name'] ?? '');
+        $categoryId = (int)($_POST['category_id'] ?? 0);
+        $price      = floatval($_POST['price'] ?? 0);
+        $quantity   = (int)($_POST['quantity'] ?? 0);
+
+        if ($name && $categoryId > 0 && $price >= 0 && $quantity >= 0) {
+            $stmt = $conn->prepare("INSERT INTO products (user_id, category_id, product_name, price, quantity) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("iisdi", $userId, $categoryId, $name, $price, $quantity);
+            $stmt->execute();
+            $_SESSION['toast'] = 'Product added successfully!';
+        }
+    }
+    elseif ($action == 'edit') {
+        $productId  = (int)($_POST['product_id'] ?? 0);
+        $name       = trim($_POST['product_name'] ?? '');
+        $categoryId = (int)($_POST['category_id'] ?? 0);
+        $price      = floatval($_POST['price'] ?? 0);
+        $quantity   = (int)($_POST['quantity'] ?? 0);
+
+        if ($productId > 0 && $name && $categoryId > 0) {
+            $stmt = $conn->prepare("UPDATE products SET product_name = ?, category_id = ?, price = ?, quantity = ? WHERE product_id = ? AND user_id = ?");
+            $stmt->bind_param("ssdiii", $name, $categoryId, $price, $quantity, $productId, $userId);
+            $stmt->execute();
+            $_SESSION['toast'] = 'Product updated successfully!';
+        }
+    }
+    elseif ($action == 'delete') {
+        $productId = (int)($_POST['product_id'] ?? 0);
+        if ($productId > 0) {
+            $stmt = $conn->prepare("DELETE FROM products WHERE product_id = ? AND user_id = ?");
+            $stmt->bind_param("ii", $productId, $userId);
+            $stmt->execute();
+            $_SESSION['toast'] = 'Product deleted.';
+        }
+    }
+
+    header('Location: products.php');
+    exit;
 }
 
 
@@ -78,10 +122,10 @@ echo $row['product_name'] . "<br>";
 // }
 
 // Check for toast message from redirect
-// $toast = '';
-// if (isset($_SESSION['toast'])) {
-//     $toast = $_SESSION['toast'];
-//     unset($_SESSION['toast']);
+$toast = '';
+if (isset($_SESSION['toast'])) {
+    $toast = $_SESSION['toast'];
+    unset($_SESSION['toast']);
 // }
 
 // ─── SELECT all products with category names ─────────────────────────────────
@@ -95,8 +139,24 @@ echo $row['product_name'] . "<br>";
 // $stmt->execute([$userId]);
 // $products = $stmt->fetchAll();
 
+$stmt = $conn->prepare("
+    SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity FROM products p 
+    JOIN category c ON p.category_id = c.category_id 
+    WHERE p.user_id = ? 
+    ORDER BY p.product_id ASC
+");
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
 // ─── SELECT all categories for dropdowns ─────────────────────────────────────
 // $categories = $pdo->query("SELECT category_id, category_name FROM category ORDER BY category_id")->fetchAll();
+
+$result = $conn->query("
+    SELECT category_id, category_name FROM category 
+    ORDER BY category_id
+");
+$categories = $result->fetch_all(MYSQLI_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -365,7 +425,7 @@ echo $row['product_name'] . "<br>";
     document.getElementById('editId').value              = product.id;
     document.getElementById('prodName').value            = product.name;
     document.getElementById('prodCategory').value        = product.category_id;
-    document.getElementById('prodUnit').value            = product.unit || '';
+    //document.getElementById('prodUnit').value            = product.unit || '';
     document.getElementById('prodPrice').value           = product.price;
     document.getElementById('prodQty').value             = product.quantity;
     document.getElementById('modalError').style.display  = 'none';

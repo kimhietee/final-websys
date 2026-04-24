@@ -20,25 +20,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $field = $_POST['field'] ?? '';
     $value = trim($_POST['value'] ?? '');
 
-    if ($field === 'username' && $value) {
-        $stmt = $pdo->prepare("UPDATE users SET username = ? WHERE user_id = ?");
-        $stmt->execute([$value, $userId]);
-        $_SESSION['username'] = $value;
-        $toast = 'Name updated!';
+    $stmt = $conn->prepare("UPDATE users SET username = ? WHERE user_id = ?");
+    $stmt->bind_param("si", $value, $userId);
+    $stmt->execute();
+
+    $check = $conn->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
+    $check->bind_param("si", $value, $userId);
+    $check->execute();
+    $check->store_result();
+    if ($check->num_rows > 0) {
+        $toast = 'Email already in use.';
+    } else {
+        $stmt = $conn->prepare("UPDATE users SET email = ? WHERE user_id = ?");
+        $stmt->bind_param("si", $value, $userId);
+        $stmt->execute();
     }
-    elseif ($field === 'email' && $value) {
-        // Check for duplicate email
-        $check = $pdo->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
-        $check->execute([strtolower($value), $userId]);
-        if ($check->fetch()) {
-            $toast = 'Email already in use.';
-        } else {
-            $stmt = $pdo->prepare("UPDATE users SET email = ? WHERE user_id = ?");
-            $stmt->execute([strtolower($value), $userId]);
-            $_SESSION['email'] = strtolower($value);
-            $toast = 'Email updated!';
-        }
-    }
+
+
+    $stmt = $conn->prepare("SELECT user_id, email, username FROM users WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+
+    
+    $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM products WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $totalProducts = $stmt->get_result()->fetch_assoc()['cnt'];
+
+    $stmt = $conn->prepare("SELECT COALESCE(SUM(quantity),0) AS total FROM products WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $stockTotal = $stmt->get_result()->fetch_assoc()['total'];
+
+    // if ($field === 'username' && $value) {
+    //     $stmt = $pdo->prepare("UPDATE users SET username = ? WHERE user_id = ?");
+    //     $stmt->execute([$value, $userId]);
+    //     $_SESSION['username'] = $value;
+    //     $toast = 'Name updated!';
+    // }
+    // elseif ($field === 'email' && $value) {
+    //     // Check for duplicate email
+    //     $check = $pdo->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
+    //     $check->execute([strtolower($value), $userId]);
+    //     if ($check->fetch()) {
+    //         $toast = 'Email already in use.';
+    //     } else {
+    //         $stmt = $pdo->prepare("UPDATE users SET email = ? WHERE user_id = ?");
+    //         $stmt->execute([strtolower($value), $userId]);
+    //         $_SESSION['email'] = strtolower($value);
+    //         $toast = 'Email updated!';
+    //     }
+    // }
 
     if ($toast) {
         $_SESSION['toast'] = $toast;

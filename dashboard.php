@@ -3,59 +3,11 @@
  * KIM INVENTORIES — dashboard.php
  * Dashboard with stats, recent products, and category breakdown from MySQL.
  */
-$db_name = "kim_inventories";
-$conn = new mysqli("localhost", "root", "", $db_name);
+// $db_name = "kim_inventories";
+// $conn = new mysqli("localhost", "root", "", $db_name);
 
-if ($conn->connect_error)
-    die("Connection failed: " . $conn->connect_error);
-
-// else
-  // {
-  //   // Run the SQL command to list tables
-  //   $sql = "SHOW TABLES";
-  //   $result = $conn->query($sql);
-
-  //   if ($result->num_rows > 0) {
-  //       echo "<h3>Tables in $db_name:</h3><ul>";
-  //       // fetch_array returns each row as a numeric array
-  //       while($row = $result->fetch_array()) {
-  //           echo "<li>" . $row[0] . "</li>";
-  //       }
-  //       echo "</ul>";
-  //   } else {
-  //       echo "The database is empty (no tables found).";
-  //   }
-
-    // $table = "products"; // Change this to your actual table name
-    // $result = $conn->query("DESCRIBE $table");
-
-    // echo "<h3>Attributes of $table:</h3><table border='1'><tr><th>Field</th><th>Type</th><th>Null</th></tr>";
-    // while($row = $result->fetch_assoc()) {
-    //     echo "<tr><td>{$row['Field']}</td><td>{$row['Type']}</td><td>{$row['Null']}</td></tr>";
-    // }
-    // echo "</table>";
-
-
-    // $table = "users"; // Change this to your actual table name
-    // $result = $conn->query("DESCRIBE $table");
-
-    // echo "<h3>Attributes of $table:</h3><table border='1'><tr><th>Field</th><th>Type</th><th>Null</th></tr>";
-    // while($row = $result->fetch_assoc()) {
-    //     echo "<tr><td>{$row['Field']}</td><td>{$row['Type']}</td><td>{$row['Null']}</td></tr>";
-    // }
-    // echo "</table>";
-
-
-    // $table = "category"; // Change this to your actual table name
-    // $result = $conn->query("DESCRIBE $table");
-
-    // echo "<h3>Attributes of $table:</h3><table border='1'><tr><th>Field</th><th>Type</th><th>Null</th></tr>";
-    // while($row = $result->fetch_assoc()) {
-    //     echo "<tr><td>{$row['Field']}</td><td>{$row['Type']}</td><td>{$row['Null']}</td></tr>";
-    // }
-    // echo "</table>";
-    // die();
-// }
+// if ($conn->connect_error)
+//     die("Connection failed: " . $conn->connect_error);
 
 session_start();
 require_once 'db_connect.php';
@@ -70,40 +22,76 @@ $userId   = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
 // ─── SELECT stats ────────────────────────────────────────────────────────────
-$stats = $pdo->prepare("
-    SELECT
-        COALESCE(SUM(quantity), 0) AS total_stock,
-        COALESCE(SUM(price * quantity), 0) AS total_value,
-        SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock,
-        SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
-    FROM products WHERE user_id = ?
-");
+// $stats = $pdo->prepare("
+//     SELECT
+//         COALESCE(SUM(quantity), 0) AS total_stock,
+//         COALESCE(SUM(price * quantity), 0) AS total_value,
+//         SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock,
+//         SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
+//     FROM products WHERE user_id = ?
+// ");
+
+$stmt = $conn->prepare("
+                        SELECT 
+                              COALESCE(SUM(quantity),0) AS total_stock, 
+                              COALESCE(SUM(price*quantity),0) AS total_value, 
+                              SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock, 
+                              SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
+                        FROM products WHERE user_id = ?
+                        ");
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$s = $stmt->get_result()->fetch_assoc();
 $stats->execute([$userId]);
 $s = $stats->fetch();
 
 // ─── SELECT recent 6 products ────────────────────────────────────────────────
-$recent = $pdo->prepare("
-    SELECT p.product_name, c.category_name, p.quantity, p.price, p.unit
-    FROM products p
-    JOIN category c ON p.category_id = c.category_id
-    WHERE p.user_id = ?
-    ORDER BY p.product_id DESC
-    LIMIT 6
-");
-$recent->execute([$userId]);
-$recentProducts = $recent->fetchAll();
+// $recent = $pdo->prepare("
+//     SELECT p.product_name, c.category_name, p.quantity, p.price, p.unit
+//     FROM products p
+//     JOIN category c ON p.category_id = c.category_id
+//     WHERE p.user_id = ?
+//     ORDER BY p.product_id DESC
+//     LIMIT 6
+// ");
+// $recent->execute([$userId]);
+// $recentProducts = $recent->fetchAll();
 
+$stmt = $conn->prepare("
+  SELECT p.product_name, c.category_name, p.quantity, p.price 
+  FROM products p 
+  JOIN category c ON p.category_id = c.category_id 
+  WHERE p.user_id = ? 
+  ORDER BY p.product_id 
+  DESC LIMIT 6
+  ");
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$recentProducts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 // ─── SELECT category totals ─────────────────────────────────────────────────
-$catTotals = $pdo->prepare("
-    SELECT c.category_name, COALESCE(SUM(p.quantity), 0) AS total_qty
-    FROM category c
-    LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ?
-    GROUP BY c.category_id, c.category_name
-    HAVING total_qty > 0
-    ORDER BY total_qty DESC
-");
-$catTotals->execute([$userId]);
-$categoryData = $catTotals->fetchAll();
+// $catTotals = $pdo->prepare("
+//     SELECT c.category_name, COALESCE(SUM(p.quantity), 0) AS total_qty
+//     FROM category c
+//     LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ?
+//     GROUP BY c.category_id, c.category_name
+//     HAVING total_qty > 0
+//     ORDER BY total_qty DESC
+// ");
+// $catTotals->execute([$userId]);
+// $categoryData = $catTotals->fetchAll();
+$stmt = $conn->prepare("
+  SELECT c.category_name, COALESCE(SUM(p.quantity),0) AS total_qty 
+  FROM category c LEFT 
+  JOIN products p ON c.category_id = p.category_id AND p.user_id = ? 
+  GROUP BY c.category_id, c.category_name 
+  HAVING total_qty > 0 
+  ORDER BY total_qty DESC
+  ");
+$stmt->bind_param("i", $userId);
+$stmt->execute();
+$categoryData = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+
 $maxQty = 1;
 foreach ($categoryData as $cd) {
     if ($cd['total_qty'] > $maxQty) $maxQty = $cd['total_qty'];
