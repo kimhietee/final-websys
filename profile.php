@@ -20,58 +20,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $field = $_POST['field'] ?? '';
     $value = trim($_POST['value'] ?? '');
 
-    $stmt = $conn->prepare("UPDATE users SET username = ? WHERE user_id = ?");
-    $stmt->bind_param("si", $value, $userId);
-    $stmt->execute();
-
-    $check = $conn->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
-    $check->bind_param("si", $value, $userId);
-    $check->execute();
-    $check->store_result();
-    if ($check->num_rows > 0) {
-        $toast = 'Email already in use.';
-    } else {
-        $stmt = $conn->prepare("UPDATE users SET email = ? WHERE user_id = ?");
+    if ($field === 'username' && $value) {
+        $stmt = $conn->prepare("UPDATE users SET username = ? WHERE user_id = ?");
         $stmt->bind_param("si", $value, $userId);
-        $stmt->execute();
+        if ($stmt->execute()) {
+            $_SESSION['username'] = $value;
+            $toast = 'Username updated!';
+        } else {
+            $toast = 'Failed to update username.';
+        }
+    } elseif ($field === 'email' && $value) {
+        // Check for duplicate email
+        $check = $conn->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
+        $check->bind_param("si", $value, $userId);
+        $check->execute();
+        $check->store_result();
+        if ($check->num_rows > 0) {
+            $toast = 'Email already in use.';
+        } else {
+            $stmt = $conn->prepare("UPDATE users SET email = ? WHERE user_id = ?");
+            $stmt->bind_param("si", $value, $userId);
+            if ($stmt->execute()) {
+                $toast = 'Email updated!';
+            } else {
+                $toast = 'Failed to update email.';
+            }
+        }
     }
-
-
-    $stmt = $conn->prepare("SELECT user_id, email, username FROM users WHERE user_id = ?");
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-
-
-    $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM products WHERE user_id = ?");
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    $totalProducts = $stmt->get_result()->fetch_assoc()['cnt'];
-
-    $stmt = $conn->prepare("SELECT COALESCE(SUM(quantity),0) AS total FROM products WHERE user_id = ?");
-    $stmt->bind_param("i", $userId);
-    $stmt->execute();
-    $stockTotal = $stmt->get_result()->fetch_assoc()['total'];
-
-    // if ($field === 'username' && $value) {
-    //     $stmt = $pdo->prepare("UPDATE users SET username = ? WHERE user_id = ?");
-    //     $stmt->execute([$value, $userId]);
-    //     $_SESSION['username'] = $value;
-    //     $toast = 'Name updated!';
-    // }
-    // elseif ($field === 'email' && $value) {
-    //     // Check for duplicate email
-    //     $check = $pdo->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
-    //     $check->execute([strtolower($value), $userId]);
-    //     if ($check->fetch()) {
-    //         $toast = 'Email already in use.';
-    //     } else {
-    //         $stmt = $pdo->prepare("UPDATE users SET email = ? WHERE user_id = ?");
-    //         $stmt->execute([strtolower($value), $userId]);
-    //         $_SESSION['email'] = strtolower($value);
-    //         $toast = 'Email updated!';
-    //     }
-    // }
 
     if ($toast) {
         $_SESSION['toast'] = $toast;
@@ -88,9 +63,6 @@ if (isset($_SESSION['toast'])) {
 }
 
 // ─── SELECT user data ────────────────────────────────────────────────────────
-// $stmt = $pdo->prepare("SELECT user_id, email, username, created_at FROM users WHERE user_id = ?");
-// $stmt->execute([$userId]);
-// $user = $stmt->fetch();
 $stmt = $conn->prepare("SELECT user_id, email, username, created_at FROM users WHERE user_id = ?");
 $stmt->bind_param("i", $userId);
 $stmt->execute();
@@ -172,11 +144,11 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
           <!-- Name Field -->
           <div class="profile-field">
             <div class="profile-field-info" style="flex:1;">
-              <div class="field-label">Your Name</div>
+              <div class="field-label">Username</div>
               <div class="field-value" id="nameVal"><?= htmlspecialchars($displayName) ?></div>
               <form method="POST" action="profile.php" style="display:none;" id="nameForm">
                 <input type="hidden" name="field" value="username" />
-                <input class="field-edit-input" type="text" id="nameInput" name="value" placeholder="Full name" value="<?= htmlspecialchars($displayName) ?>" />
+                <input class="field-edit-input" type="text" id="nameInput" name="value" placeholder="Enter username" value="<?= htmlspecialchars($displayName) ?>" />
                 <div class="field-edit-actions" style="display:flex;">
                   <button type="submit" class="btn-save">Save</button>
                   <button type="button" class="btn-cancel-sm" onclick="cancelField('name')">Cancel</button>
@@ -229,13 +201,6 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
 
           <!-- Account Stats -->
           <?php
-            // $prodCount = $pdo->prepare("SELECT COUNT(*) FROM products WHERE user_id = ?");
-            // $prodCount->execute([$userId]);
-            // $totalProducts = $prodCount->fetchColumn();
-
-            // $totalStock = $pdo->prepare("SELECT COALESCE(SUM(quantity), 0) FROM products WHERE user_id = ?");
-            // $totalStock->execute([$userId]);
-            // $stockTotal = $totalStock->fetchColumn();
             $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM products WHERE user_id = ?");
             $stmt->bind_param("i", $userId);
             $stmt->execute();

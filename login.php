@@ -88,7 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       <div class="form-group">
         <label for="loginPassword">Password</label>
         <input type="password" id="loginPassword" name="password"
-               placeholder="Enter your password" required autocomplete="current-password" />
+               placeholder="Enter your password" required autocomplete="current-password"
+               value="<?= htmlspecialchars($_POST['password'] ?? '') ?>" />
       </div>
       <button type="submit" class="btn-auth">Sign In</button>
     </form>

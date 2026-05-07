@@ -3,15 +3,8 @@
  * KIM INVENTORIES — dashboard.php
  * Dashboard with stats, recent products, and category breakdown from MySQL.
  */
-// $db_name = "kim_inventories";
-// $conn = new mysqli("localhost", "root", "", $db_name);
-
-// if ($conn->connect_error)
-//     die("Connection failed: " . $conn->connect_error);
-
 session_start();
 require_once 'db_connect.php';
-require_once 'constants.php';
 
 // Auth guard
 if (!isset($_SESSION['user_id'])) {
@@ -23,75 +16,43 @@ $userId   = $_SESSION['user_id'];
 $username = $_SESSION['username'];
 
 // ─── SELECT stats ────────────────────────────────────────────────────────────
-// $stats = $pdo->prepare("
-//     SELECT
-//         COALESCE(SUM(quantity), 0) AS total_stock,
-//         COALESCE(SUM(price * quantity), 0) AS total_value,
-//         SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock,
-//         SUM(CASE WHEN quantity = 0 THEx  N 1 ELSE 0 END) AS out_of_stock
-//     FROM products WHERE user_id = ?
-// ");
-
 $stmt = $conn->prepare("
-                        SELECT 
-                              COALESCE(SUM(quantity),0) AS total_stock, 
-                              COALESCE(SUM(price*quantity),0) AS total_value, 
-                              SUM(CASE WHEN quantity > 0 AND quantity < " . LOW_STOCK_THRESHOLD .  " THEN 1 ELSE 0 END) AS low_stock, 
-                              SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
-                        FROM products WHERE user_id = ?
-                        ");
+    SELECT
+        COALESCE(SUM(quantity), 0) AS total_stock,
+        COALESCE(SUM(price * quantity), 0) AS total_value,
+        SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock,
+        SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock
+    FROM products WHERE user_id = ?
+");
 $stmt->bind_param("i", $userId);
 $stmt->execute();
 $s = $stmt->get_result()->fetch_assoc();
-// $stats->execute([$userId]);
-// $s = $stats->fetch();
 
 // ─── SELECT recent 6 products ────────────────────────────────────────────────
-// $recent = $pdo->prepare("
-//     SELECT p.product_name, c.category_name, p.quantity, p.price, p.unit
-//     FROM products p
-//     JOIN category c ON p.category_id = c.category_id
-//     WHERE p.user_id = ?
-//     ORDER BY p.product_id DESC
-//     LIMIT 6
-// ");
-// $recent->execute([$userId]);
-// $recentProducts = $recent->fetchAll();
+$stmt2 = $conn->prepare("
+    SELECT p.product_name, c.category_name, p.quantity, p.price
+    FROM products p
+    JOIN category c ON p.category_id = c.category_id
+    WHERE p.user_id = ?
+    ORDER BY p.product_id DESC
+    LIMIT 6
+");
+$stmt2->bind_param("i", $userId);
+$stmt2->execute();
+$recentProducts = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
 
-$stmt = $conn->prepare("
-  SELECT p.product_name, c.category_name, p.quantity, p.price 
-  FROM products p 
-  JOIN category c ON p.category_id = c.category_id 
-  WHERE p.user_id = ? 
-  ORDER BY p.product_id 
-  DESC LIMIT 6
-  ");
-$stmt->bind_param("i", $userId);
-$stmt->execute();
-$recentProducts = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 // ─── SELECT category totals ─────────────────────────────────────────────────
-// $catTotals = $pdo->prepare("
-//     SELECT c.category_name, COALESCE(SUM(p.quantity), 0) AS total_qty
-//     FROM category c
-//     LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ?
-//     GROUP BY c.category_id, c.category_name
-//     HAVING total_qty > 0
-//     ORDER BY total_qty DESC
-// ");
-// $catTotals->execute([$userId]);
-// $categoryData = $catTotals->fetchAll();
-$stmt = $conn->prepare("
-  SELECT c.category_name, COALESCE(SUM(p.quantity),0) AS total_qty 
-  FROM category c LEFT 
-  JOIN products p ON c.category_id = p.category_id AND p.user_id = ? 
-  GROUP BY c.category_id, c.category_name 
-  HAVING total_qty > 0 
-  ORDER BY total_qty DESC
-  ");
-$stmt->bind_param("i", $userId);
-$stmt->execute();
-$categoryData = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
+$stmt3 = $conn->prepare("
+    SELECT c.category_name, COALESCE(SUM(p.quantity), 0) AS total_qty
+    FROM category c
+    LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ?
+    GROUP BY c.category_id, c.category_name
+    HAVING total_qty > 0
+    ORDER BY total_qty DESC
+");
+$stmt3->bind_param("i", $userId);
+$stmt3->execute();
+$categoryData = $stmt3->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $maxQty = 1;
 foreach ($categoryData as $cd) {
@@ -186,7 +147,7 @@ else $greeting = 'Good evening';
       <!-- Recent Products -->
       <div class="content-card-solid">
         <div class="section-heading">Recent Products</div>
-        <table class="recent-table">
+        <table class="recent-table" id="recent-products-table">
           <thead>
             <tr>
               <th>Product</th>
@@ -256,6 +217,7 @@ else $greeting = 'Good evening';
 <div class="toast-notif" id="toastNotif"></div>
 
 <script src="js/auth.js"></script>
+
 
 </body>
 </html>

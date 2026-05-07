@@ -51,6 +51,11 @@
   --radius-xl:        20px;
   --radius-pill:      40px;
 
+  /* Table Zebra Stripes */
+  --row-odd-bg:       #ffffff; 
+  --row-even-bg:      linear-gradient(135deg, #e9f5db 0%, #deeed0 100%);
+  --row-hover-bg:     linear-gradient(135deg, #d4e8c4 0%, #c8e0b4 100%);
+
   --font: 'Nunito', sans-serif;
 }
 
@@ -361,16 +366,14 @@ a { text-decoration: none; color: inherit; }
   width: 100%;
   border-collapse: collapse;
 }
-.products-table th {
+.products-table thead tr {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+}
+.products-table thead th {
   text-align: left;
-  padding: 11px 14px;
-  font-size: 11.5px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-medium);
-  border-bottom: 2px solid var(--card-border);
-  white-space: nowrap;
+  padding: 14px;
+  color: white !important;
+  border: none !important;
 }
 .products-table td {
   padding: 13px 14px;
@@ -380,7 +383,6 @@ a { text-decoration: none; color: inherit; }
   color: var(--text-dark);
   vertical-align: middle;
 }
-.products-table tr:hover td { background: var(--body-bg); }
 .products-table .product-name { font-weight: 700; }
 .products-table .product-price { font-weight: 700; color: var(--primary-dark); }
 .td-actions { display: flex; gap: 6px; align-items: center; }
@@ -798,6 +800,46 @@ a { text-decoration: none; color: inherit; }
   color: var(--text-dark);
 }
 .recent-table tr:last-child td { border-bottom: none; }
+
+/* Recent Table Header Match */
+.recent-table thead tr {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+}
+.recent-table thead th {
+  color: white !important;
+  border: none !important;
+  padding: 12px;
+}
+
+/* ============================================================
+   CONSOLIDATED ZEBRA STRIPES (Products & Recent Tables)
+   ============================================================ */
+.products-table tbody tr:nth-child(odd),
+.recent-table tbody tr:nth-child(odd) {
+  background: var(--row-odd-bg) !important;
+}
+
+.products-table tbody tr:nth-child(even),
+.recent-table tbody tr:nth-child(even) {
+  background: var(--row-even-bg) !important;
+}
+
+.products-table tbody tr:hover,
+.recent-table tbody tr:hover {
+  background: var(--row-hover-bg) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(88, 122, 66, 0.12);
+}
+
+/* Critical: Make sure Bootstrap cells don't have their own background */
+.products-table tbody td,
+.recent-table tbody td,
+.products-table tr:hover td,
+.recent-table tr:hover td {
+  background: transparent !important;
+  transition: all 0.2s ease;
+}
+
 .recent-table .product-name-cell { font-weight: 700; }
 
 /* ============================================================

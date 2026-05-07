@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $conn->prepare("
                 UPDATE products SET product_name = ?, category_id = ?, price = ?, quantity = ? 
                 WHERE product_id = ? AND user_id = ?");
-            $stmt->bind_param("ssdiii", $name, $categoryId, $price, $quantity, $productId, $userId);
+            $stmt->bind_param("sidiii", $name, $categoryId, $price, $quantity, $productId, $userId);
             $stmt->execute();
             $_SESSION['toast'] = 'Product updated successfully!';
         }

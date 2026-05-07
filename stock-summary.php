@@ -15,19 +15,6 @@ if (!isset($_SESSION['user_id'])) {
 $userId = $_SESSION['user_id'];
 
 // ─── SELECT stats ────────────────────────────────────────────────────────────
-// $stats = $pdo->prepare("
-//     SELECT
-//         COALESCE(SUM(quantity), 0) AS total_stock,
-//         COALESCE(SUM(price * quantity), 0) AS total_value,
-//         SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock,
-//         SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock,
-//         SUM(CASE WHEN quantity >= 10 THEN 1 ELSE 0 END) AS in_stock,
-//         COUNT(*) AS total_products
-//     FROM products WHERE user_id = ?
-// ");
-// $stats->execute([$userId]);
-// $s = $stats->fetch();
-
 $stmt = $conn->prepare("SELECT COALESCE(SUM(quantity),0) AS total_stock, COALESCE(SUM(price*quantity),0) AS total_value, SUM(CASE WHEN quantity > 0 AND quantity < 10 THEN 1 ELSE 0 END) AS low_stock, SUM(CASE WHEN quantity = 0 THEN 1 ELSE 0 END) AS out_of_stock, SUM(CASE WHEN quantity >= 10 THEN 1 ELSE 0 END) AS in_stock, COUNT(*) AS total_products FROM products WHERE user_id = ?");
 $stmt->bind_param("i", $userId);
 $stmt->execute();
@@ -40,16 +27,6 @@ $outStockCount = (int)$s['out_of_stock'];
 $inStockPct    = $totalProducts > 0 ? round(($inStockCount / $totalProducts) * 100) : 0;
 
 // ─── SELECT category totals for bar chart ────────────────────────────────────
-// $catTotals = $pdo->prepare("
-//     SELECT c.category_name, COALESCE(SUM(p.quantity), 0) AS total_qty
-//     FROM category c
-//     LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ?
-//     GROUP BY c.category_id, c.category_name
-//     ORDER BY c.category_id
-// ");
-// $catTotals->execute([$userId]);
-// $categoryData = $catTotals->fetchAll();
-
 $stmt = $conn->prepare("SELECT c.category_name, COALESCE(SUM(p.quantity),0) AS total_qty FROM category c LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ? GROUP BY c.category_id, c.category_name ORDER BY c.category_id");
 $stmt->bind_param("i", $userId);
 $stmt->execute();

@@ -50,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt3->bind_param("sss", $email, $username, $hashedPw);
                 $stmt3->execute();
                 $success = 'Account created! Redirecting to login…';
+                $_POST = []; // Clear inputs on success
             }
         }
     }
@@ -101,9 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <!-- Register Form -->
     <form class="auth-form" id="registerForm" method="POST" action="register.php" novalidate autocomplete="on">
       <div class="form-group">
-        <label for="regName">Full Name</label>
+        <label for="regName">Username</label>
         <input type="text" id="regName" name="username"
-               placeholder="Enter your full name" required autocomplete="name"
+               placeholder="Enter username" required autocomplete="name"
                value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" />
       </div>
       <div class="form-group">
@@ -115,12 +116,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
       <div class="form-group">
         <label for="regPassword">Password</label>
         <input type="password" id="regPassword" name="password"
-               placeholder="Minimum 6 characters" required autocomplete="new-password" />
+               placeholder="Minimum 6 characters" required autocomplete="new-password"
+               value="<?= htmlspecialchars($_POST['password'] ?? '') ?>" />
       </div>
       <div class="form-group">
         <label for="regConfirm">Confirm Password</label>
         <input type="password" id="regConfirm" name="confirm_password"
-               placeholder="Repeat your password" required autocomplete="new-password" />
+               placeholder="Repeat your password" required autocomplete="new-password"
+               value="<?= htmlspecialchars($_POST['confirm_password'] ?? '') ?>" />
       </div>
       <button type="submit" class="btn-auth">Create Account</button>
     </form>
