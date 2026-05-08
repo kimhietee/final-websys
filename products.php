@@ -124,6 +124,14 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 
 <div class="app-wrapper">
 
+  <!-- Mobile Menu Overlay -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- Mobile Menu Toggle Button -->
+  <button class="mobile-menu-btn" title="Toggle menu">
+    <i class="bi bi-list"></i>
+  </button>
+
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar">
     <div class="sidebar-logo">
@@ -359,6 +367,7 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 
 <!-- Scripts -->
 <script src="js/auth.js"></script>
+<script src="js/mobile-menu.js"></script>
 <script>
   // ─── Client-side filter (no page reload) ───────────────────────────────────
   function filterTable() {

@@ -1,7 +1,8 @@
 <?php
 /**
  * KIM INVENTORIES — profile.php
- * User profile view and inline edit with SELECT + UPDATE on users table.
+ * User profile with editable name, email, bio, and photo upload.
+ * Features: Database updates, localStorage persistence, client-side validation
  */
 session_start();
 require_once 'db_connect.php';
@@ -13,53 +14,80 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userId = $_SESSION['user_id'];
-$toast  = '';
+$apiResponse = ['success' => false, 'message' => '', 'data' => null];
 
-// ─── Handle POST updates ────────────────────────────────────────────────────
+// ─── Handle AJAX POST requests ────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $field = $_POST['field'] ?? '';
-    $value = trim($_POST['value'] ?? '');
+    header('Content-Type: application/json');
+    
+    $action = $_POST['action'] ?? '';
 
-    if ($field === 'username' && $value) {
-        $stmt = $conn->prepare("UPDATE users SET username = ? WHERE user_id = ?");
-        $stmt->bind_param("si", $value, $userId);
-        if ($stmt->execute()) {
-            $_SESSION['username'] = $value;
-            $toast = 'Username updated!';
-        } else {
-            $toast = 'Failed to update username.';
+    // Update username
+    if ($action === 'update_username') {
+        $newUsername = trim($_POST['value'] ?? '');
+        $errors = [];
+
+        // Validation
+        if (empty($newUsername)) {
+            $errors[] = 'Username cannot be empty';
+        } elseif (strlen($newUsername) < 3) {
+            $errors[] = 'Username must be at least 3 characters';
+        } elseif (strlen($newUsername) > 50) {
+            $errors[] = 'Username cannot exceed 50 characters';
         }
-    } elseif ($field === 'email' && $value) {
-        // Check for duplicate email
+
+        if (!empty($errors)) {
+            echo json_encode(['success' => false, 'message' => implode('. ', $errors)]);
+            exit;
+        }
+
+        $stmt = $conn->prepare("UPDATE users SET username = ? WHERE user_id = ?");
+        $stmt->bind_param("si", $newUsername, $userId);
+        if ($stmt->execute()) {
+            $_SESSION['username'] = $newUsername;
+            echo json_encode(['success' => true, 'message' => 'Username updated successfully!', 'value' => $newUsername]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to update username']);
+        }
+        exit;
+    }
+
+    // Update email
+    if ($action === 'update_email') {
+        $newEmail = trim($_POST['value'] ?? '');
+        $errors = [];
+
+        // Validation
+        if (empty($newEmail)) {
+            $errors[] = 'Email cannot be empty';
+        } elseif (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'Invalid email format';
+        }
+
+        if (!empty($errors)) {
+            echo json_encode(['success' => false, 'message' => implode('. ', $errors)]);
+            exit;
+        }
+
+        // Check for duplicate
         $check = $conn->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
-        $check->bind_param("si", $value, $userId);
+        $check->bind_param("si", $newEmail, $userId);
         $check->execute();
         $check->store_result();
         if ($check->num_rows > 0) {
-            $toast = 'Email already in use.';
-        } else {
-            $stmt = $conn->prepare("UPDATE users SET email = ? WHERE user_id = ?");
-            $stmt->bind_param("si", $value, $userId);
-            if ($stmt->execute()) {
-                $toast = 'Email updated!';
-            } else {
-                $toast = 'Failed to update email.';
-            }
+            echo json_encode(['success' => false, 'message' => 'This email is already in use']);
+            exit;
         }
-    }
 
-    if ($toast) {
-        $_SESSION['toast'] = $toast;
+        $stmt = $conn->prepare("UPDATE users SET email = ? WHERE user_id = ?");
+        $stmt->bind_param("si", $newEmail, $userId);
+        if ($stmt->execute()) {
+            echo json_encode(['success' => true, 'message' => 'Email updated successfully!', 'value' => $newEmail]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Failed to update email']);
+        }
+        exit;
     }
-    header('Location: profile.php');
-    exit;
-}
-
-// Check for toast from redirect
-$toast = '';
-if (isset($_SESSION['toast'])) {
-    $toast = $_SESSION['toast'];
-    unset($_SESSION['toast']);
 }
 
 // ─── SELECT user data ────────────────────────────────────────────────────────
@@ -83,9 +111,37 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
-<body>
+<body data-user-id="<?= $userId ?>">
 
 <div class="app-wrapper">
+
+  <!-- Mobile Menu Overlay -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- ===== MOBILE TOP BAR (mobile-only) ===== -->
+  <header class="mobile-top-bar d-flex align-items-center">
+    <div class="mobile-top-bar-spacer-left"></div>
+    <div class="mobile-top-bar-button-wrapper">
+      <button class="mobile-menu-btn" title="Toggle menu">
+        <i class="bi bi-list"></i>
+      </button>
+    </div>
+    <div class="mobile-top-bar-logo">
+      <div class="mobile-logo-emblem">
+        <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="35" cy="35" r="32" fill="none" stroke="#3d5a2d" stroke-width="1.5" stroke-dasharray="3 2.5"/>
+          <circle cx="35" cy="35" r="26" fill="none" stroke="#3d5a2d" stroke-width="1.5"/>
+          <circle cx="35" cy="5"  r="2.5" fill="#3d5a2d"/>
+          <circle cx="35" cy="65" r="2.5" fill="#3d5a2d"/>
+          <circle cx="5"  cy="35" r="2.5" fill="#3d5a2d"/>
+          <circle cx="65" cy="35" r="2.5" fill="#3d5a2d"/>
+          <text x="35" y="46" text-anchor="middle" font-size="26" font-weight="900"
+                fill="#3d5a2d" font-family="Georgia,serif">K</text>
+        </svg>
+      </div>
+      <div class="mobile-logo-text">KIM INVENTORIES</div>
+    </div>
+  </header>
 
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar">
@@ -135,10 +191,10 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
               <i class="bi bi-person-fill" id="photoIcon"></i>
               <img id="photoPreview" src="" alt="Profile Photo" style="display:none;" />
             </div>
-            <button class="upload-photo-btn" onclick="document.getElementById('photoInput').click()">
+            <button class="upload-photo-btn" type="button" onclick="document.getElementById('photoInput').click()">
               <i class="bi bi-upload"></i> Upload Photo
             </button>
-            <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handlePhotoUpload(event)" />
+            <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="handlePhotoUpload()" />
           </div>
 
           <!-- Name Field -->
@@ -146,14 +202,15 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
             <div class="profile-field-info" style="flex:1;">
               <div class="field-label">Username</div>
               <div class="field-value" id="nameVal"><?= htmlspecialchars($displayName) ?></div>
-              <form method="POST" action="profile.php" style="display:none;" id="nameForm">
-                <input type="hidden" name="field" value="username" />
-                <input class="field-edit-input" type="text" id="nameInput" name="value" placeholder="Enter username" value="<?= htmlspecialchars($displayName) ?>" />
-                <div class="field-edit-actions" style="display:flex;">
-                  <button type="submit" class="btn-save">Save</button>
+              <div id="nameEditMode" style="display:none;">
+                <input class="field-edit-input" type="text" id="nameInput" placeholder="Enter username" value="<?= htmlspecialchars($displayName) ?>" />
+                <div class="field-error-msg" id="nameError"></div>
+                <div class="field-success-msg" id="nameSuccess"></div>
+                <div class="field-edit-actions">
+                  <button type="button" class="btn-save" onclick="saveField('name')">Save</button>
                   <button type="button" class="btn-cancel-sm" onclick="cancelField('name')">Cancel</button>
                 </div>
-              </form>
+              </div>
             </div>
             <button class="btn-edit" id="nameEditBtn" onclick="editField('name')">Edit</button>
           </div>
@@ -163,14 +220,15 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
             <div class="profile-field-info" style="flex:1;">
               <div class="field-label">Email</div>
               <div class="field-value" id="emailVal"><?= htmlspecialchars($displayEmail) ?></div>
-              <form method="POST" action="profile.php" style="display:none;" id="emailForm">
-                <input type="hidden" name="field" value="email" />
-                <input class="field-edit-input" type="email" id="emailInput" name="value" placeholder="Email address" value="<?= htmlspecialchars($displayEmail) ?>" />
-                <div class="field-edit-actions" style="display:flex;">
-                  <button type="submit" class="btn-save">Save</button>
+              <div id="emailEditMode" style="display:none;">
+                <input class="field-edit-input" type="email" id="emailInput" placeholder="Email address" value="<?= htmlspecialchars($displayEmail) ?>" />
+                <div class="field-error-msg" id="emailError"></div>
+                <div class="field-success-msg" id="emailSuccess"></div>
+                <div class="field-edit-actions">
+                  <button type="button" class="btn-save" onclick="saveField('email')">Save</button>
                   <button type="button" class="btn-cancel-sm" onclick="cancelField('email')">Cancel</button>
                 </div>
-              </form>
+              </div>
             </div>
             <button class="btn-edit" id="emailEditBtn" onclick="editField('email')">Edit</button>
           </div>
@@ -199,6 +257,23 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
             You can edit your name and email using the Edit buttons on the left.
           </p>
 
+          <!-- Bio Section -->
+          <div class="bio-section">
+            <div class="field-label">Personal Bio (max 500 characters)</div>
+            <div id="bioDisplay" class="bio-display-text">Click to add your bio...</div>
+            <div id="bioEditMode" style="display:none;">
+              <textarea class="bio-textarea" id="bioInput" placeholder="Tell us about yourself..." maxlength="500"></textarea>
+              <div class="bio-counter">
+                <span id="bioCharCount">0</span> / 500
+              </div>
+              <div class="bio-actions">
+                <button type="button" class="btn-save" onclick="saveBio()">Save Bio</button>
+                <button type="button" class="btn-cancel-sm" onclick="cancelBio()">Cancel</button>
+              </div>
+            </div>
+            <button class="btn-edit" id="bioEditBtn" onclick="editBio()" style="margin-top:8px;">Edit Bio</button>
+          </div>
+
           <!-- Account Stats -->
           <?php
             $stmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM products WHERE user_id = ?");
@@ -211,7 +286,7 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
             $stmt->execute();
             $stockTotal = $stmt->get_result()->fetch_assoc()['total'];
           ?>
-          <div style="margin-top:20px; padding-top:16px; border-top:1px dashed var(--border-color);">
+          <div style="margin-top:20px; padding-top:16px; border-top:1px dashed var(--card-border);">
             <div class="field-label" style="margin-bottom:12px;">Account Summary</div>
             <div style="display:flex; gap:16px;">
               <div class="stat-card" style="flex:1; padding:14px;">
@@ -238,41 +313,338 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
 
 <!-- Scripts -->
 <script src="js/auth.js"></script>
+<script src="js/mobile-menu.js"></script>
 <script>
-  // ─── Inline Field Edit ─────────────────────────────────────────────────────
-  function editField(field) {
-    document.getElementById(field + 'Val').style.display     = 'none';
-    document.getElementById(field + 'EditBtn').style.display = 'none';
-    document.getElementById(field + 'Form').style.display    = 'block';
-    document.getElementById(field + 'Input').focus();
-  }
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_FORMATS = ['image/jpeg', 'image/png', 'image/webp'];
+const BIO_MAX_LENGTH = 500;
 
-  function cancelField(field) {
-    document.getElementById(field + 'Form').style.display    = 'none';
-    document.getElementById(field + 'Val').style.display     = 'block';
-    document.getElementById(field + 'EditBtn').style.display = '';
-  }
+// ─── Initialize ────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  loadPhotoFromStorage();
+  loadBioFromStorage();
+  setupPhotoUploadListeners();
+  setupBioCharCounter();
+});
 
-  // ─── Photo Upload (preview only) ──────────────────────────────────────────
-  function handlePhotoUpload(event) {
-    var file = event.target.files[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var preview = document.getElementById('photoPreview');
-      var icon    = document.getElementById('photoIcon');
-      preview.src           = e.target.result;
-      preview.style.display = 'block';
-      icon.style.display    = 'none';
-    };
-    reader.readAsDataURL(file);
-    showToast('Photo updated! (preview only)');
-  }
+// ─── Name/Email Field Management ───────────────────────────────────────────
+function editField(field) {
+  document.getElementById(field + 'Val').style.display = 'none';
+  document.getElementById(field + 'EditBtn').style.display = 'none';
+  document.getElementById(field + 'EditMode').style.display = 'block';
+  document.getElementById(field + 'Input').focus();
+  clearFieldMessages(field);
+}
 
-  // ─── Show toast if redirected with message ─────────────────────────────────
-  <?php if ($toast): ?>
-    showToast('<?= addslashes($toast) ?>');
-  <?php endif; ?>
+function cancelField(field) {
+  document.getElementById(field + 'EditMode').style.display = 'none';
+  document.getElementById(field + 'Val').style.display = 'block';
+  document.getElementById(field + 'EditBtn').style.display = '';
+  clearFieldMessages(field);
+}
+
+function clearFieldMessages(field) {
+  const errorEl = document.getElementById(field + 'Error');
+  const successEl = document.getElementById(field + 'Success');
+  if (errorEl) {
+    errorEl.textContent = '';
+    errorEl.classList.remove('show');
+  }
+  if (successEl) {
+    successEl.textContent = '';
+    successEl.classList.remove('show');
+  }
+}
+
+function saveField(field) {
+  const input = document.getElementById(field + 'Input');
+  const value = input.value.trim();
+  const action = field === 'name' ? 'update_username' : 'update_email';
+  
+  // Disable button and show loading
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  
+  const formData = new FormData();
+  formData.append('action', action);
+  formData.append('value', value);
+
+  fetch('profile.php', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Update display
+      document.getElementById(field + 'Val').textContent = data.value;
+      
+      // Show success message
+      const successEl = document.getElementById(field + 'Success');
+      if (successEl) {
+        successEl.textContent = data.message;
+        successEl.classList.add('show');
+      }
+      
+      // Close edit mode after delay
+      setTimeout(() => {
+        cancelField(field);
+      }, 1500);
+      
+      showToast(data.message, 'success');
+    } else {
+      // Show error message
+      const errorEl = document.getElementById(field + 'Error');
+      if (errorEl) {
+        errorEl.textContent = data.message;
+        errorEl.classList.add('show');
+      }
+      showToast(data.message, 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    const errorEl = document.getElementById(field + 'Error');
+    if (errorEl) {
+      errorEl.textContent = 'An unexpected error occurred';
+      errorEl.classList.add('show');
+    }
+    showToast('An error occurred', 'error');
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  });
+}
+
+// ─── Bio Management ────────────────────────────────────────────────────────
+function editBio() {
+  document.getElementById('bioDisplay').style.display = 'none';
+  document.getElementById('bioEditBtn').style.display = 'none';
+  document.getElementById('bioEditMode').style.display = 'block';
+  document.getElementById('bioInput').focus();
+}
+
+function cancelBio() {
+  document.getElementById('bioEditMode').style.display = 'none';
+  document.getElementById('bioDisplay').style.display = 'block';
+  document.getElementById('bioEditBtn').style.display = '';
+}
+
+function saveBio() {
+  const bioText = document.getElementById('bioInput').value.trim();
+  localStorage.setItem(`bio_${getUserId()}`, bioText);
+  
+  // Update display
+  const bioDisplay = document.getElementById('bioDisplay');
+  if (bioText) {
+    bioDisplay.textContent = bioText;
+  } else {
+    bioDisplay.textContent = 'Click to add your bio...';
+  }
+  
+  showToast('Bio saved successfully!', 'success');
+  cancelBio();
+}
+
+function loadBioFromStorage() {
+  const userId = getUserId();
+  const savedBio = localStorage.getItem(`bio_${userId}`);
+  const bioInput = document.getElementById('bioInput');
+  const bioDisplay = document.getElementById('bioDisplay');
+  
+  if (savedBio) {
+    bioInput.value = savedBio;
+    bioDisplay.textContent = savedBio;
+  }
+  
+  updateBioCharCount();
+}
+
+function setupBioCharCounter() {
+  const bioInput = document.getElementById('bioInput');
+  bioInput.addEventListener('input', updateBioCharCount);
+}
+
+function updateBioCharCount() {
+  const bioInput = document.getElementById('bioInput');
+  const charCount = bioInput.value.length;
+  const counter = document.getElementById('bioCharCount');
+  const counterContainer = counter.parentElement;
+  
+  counter.textContent = charCount;
+  
+  // Update warning/error state
+  counterContainer.classList.remove('warning', 'error');
+  if (charCount > 450) {
+    counterContainer.classList.add('warning');
+  } else if (charCount >= BIO_MAX_LENGTH) {
+    counterContainer.classList.add('error');
+  }
+}
+
+// ─── Photo Upload Management ───────────────────────────────────────────────
+function setupPhotoUploadListeners() {
+  const photoInput = document.getElementById('photoInput');
+  const photoCircle = document.getElementById('photoCircle');
+  
+  // Prevent default drag behaviors
+  photoCircle.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    photoCircle.style.opacity = '0.7';
+  });
+  
+  photoCircle.addEventListener('dragleave', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    photoCircle.style.opacity = '1';
+  });
+  
+  photoCircle.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    photoCircle.style.opacity = '1';
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      photoInput.files = files;
+      handlePhotoUpload();
+    }
+  });
+}
+
+function handlePhotoUpload() {
+  const photoInput = document.getElementById('photoInput');
+  const file = photoInput.files[0];
+  
+  if (!file) return;
+  
+  // Validate file format
+  if (!ALLOWED_FORMATS.includes(file.type)) {
+    showToast('Please upload JPG, PNG, or WebP format only', 'error');
+    photoInput.value = '';
+    return;
+  }
+  
+  // Validate file size
+  if (file.size > MAX_PHOTO_SIZE) {
+    showToast('File size must be less than 5MB', 'error');
+    photoInput.value = '';
+    return;
+  }
+  
+  // Show loading state
+  const photoCircle = document.getElementById('photoCircle');
+  const btn = document.querySelector('.upload-photo-btn');
+  photoCircle.classList.add('loading');
+  btn.classList.add('loading');
+  
+  // Read and convert to base64
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const base64Data = e.target.result;
+    
+    // Store in localStorage
+    try {
+      localStorage.setItem(`photo_${getUserId()}`, base64Data);
+      
+      // Update preview
+      const photoPreview = document.getElementById('photoPreview');
+      const photoIcon = document.getElementById('photoIcon');
+      photoPreview.src = base64Data;
+      photoPreview.style.display = 'block';
+      photoIcon.style.display = 'none';
+      
+      // Add delete button
+      addDeletePhotoButton();
+      
+      showToast('Photo uploaded successfully!', 'success');
+    } catch (e) {
+      showToast('Photo is too large to store locally', 'error');
+    }
+    
+    photoCircle.classList.remove('loading');
+    btn.classList.remove('loading');
+  };
+  
+  reader.onerror = function() {
+    showToast('Error reading file', 'error');
+    photoCircle.classList.remove('loading');
+    btn.classList.remove('loading');
+  };
+  
+  reader.readAsDataURL(file);
+}
+
+function loadPhotoFromStorage() {
+  const userId = getUserId();
+  const savedPhoto = localStorage.getItem(`photo_${userId}`);
+  
+  if (savedPhoto) {
+    const photoPreview = document.getElementById('photoPreview');
+    const photoIcon = document.getElementById('photoIcon');
+    photoPreview.src = savedPhoto;
+    photoPreview.style.display = 'block';
+    photoIcon.style.display = 'none';
+    
+    addDeletePhotoButton();
+  }
+}
+
+function addDeletePhotoButton() {
+  const photoArea = document.querySelector('.profile-photo-area');
+  let deleteBtn = photoArea.querySelector('.delete-photo-btn');
+  
+  if (!deleteBtn) {
+    deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-photo-btn';
+    deleteBtn.type = 'button';
+    deleteBtn.innerHTML = '<i class="bi bi-trash"></i> Delete Photo';
+    deleteBtn.onclick = deletePhoto;
+    photoArea.appendChild(deleteBtn);
+  }
+}
+
+function deletePhoto(e) {
+  e.preventDefault();
+  
+  if (!confirm('Are you sure you want to delete your profile photo?')) {
+    return;
+  }
+  
+  const userId = getUserId();
+  localStorage.removeItem(`photo_${userId}`);
+  
+  const photoPreview = document.getElementById('photoPreview');
+  const photoIcon = document.getElementById('photoIcon');
+  photoPreview.style.display = 'none';
+  photoIcon.style.display = 'block';
+  
+  const deleteBtn = document.querySelector('.delete-photo-btn');
+  if (deleteBtn) {
+    deleteBtn.remove();
+  }
+  
+  document.getElementById('photoInput').value = '';
+  showToast('Photo deleted', 'success');
+}
+
+// ─── Utility Functions ─────────────────────────────────────────────────────
+function getUserId() {
+  return document.body.getAttribute('data-user-id');
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toastNotif');
+  toast.textContent = message;
+  toast.className = 'toast-notif show ' + type;
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 4000);
+}
 </script>
 
 </body>

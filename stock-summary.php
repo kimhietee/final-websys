@@ -56,6 +56,34 @@ foreach ($categoryData as $cd) {
 
 <div class="app-wrapper">
 
+  <!-- Mobile Menu Overlay -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- ===== MOBILE TOP BAR (mobile-only) ===== -->
+  <header class="mobile-top-bar d-flex align-items-center">
+    <div class="mobile-top-bar-spacer-left"></div>
+    <div class="mobile-top-bar-button-wrapper">
+      <button class="mobile-menu-btn" title="Toggle menu">
+        <i class="bi bi-list"></i>
+      </button>
+    </div>
+    <div class="mobile-top-bar-logo">
+      <div class="mobile-logo-emblem">
+        <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="35" cy="35" r="32" fill="none" stroke="#3d5a2d" stroke-width="1.5" stroke-dasharray="3 2.5"/>
+          <circle cx="35" cy="35" r="26" fill="none" stroke="#3d5a2d" stroke-width="1.5"/>
+          <circle cx="35" cy="5"  r="2.5" fill="#3d5a2d"/>
+          <circle cx="35" cy="65" r="2.5" fill="#3d5a2d"/>
+          <circle cx="5"  cy="35" r="2.5" fill="#3d5a2d"/>
+          <circle cx="65" cy="35" r="2.5" fill="#3d5a2d"/>
+          <text x="35" y="46" text-anchor="middle" font-size="26" font-weight="900"
+                fill="#3d5a2d" font-family="Georgia,serif">K</text>
+        </svg>
+      </div>
+      <div class="mobile-logo-text">KIM INVENTORIES</div>
+    </div>
+  </header>
+
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar">
     <div class="sidebar-logo">
@@ -85,6 +113,14 @@ foreach ($categoryData as $cd) {
       </button>
     </div>
   </aside>
+
+  <!-- ===== MOBILE MENU BUTTON ===== -->
+  <button class="mobile-menu-btn" id="mobileMenuBtn">
+    <i class="bi bi-list"></i>
+  </button>
+
+  <!-- ===== MOBILE MENU OVERLAY ===== -->
+  <div class="sidebar-overlay"></div>
 
   <!-- ===== MAIN CONTENT ===== -->
   <main class="main-content">
@@ -143,6 +179,7 @@ foreach ($categoryData as $cd) {
 
 <!-- Scripts -->
 <script src="js/auth.js"></script>
+<script src="js/mobile-menu.js"></script>
 <script>
   // ─── Bar Chart: Stock by Category ─────────────────────────────────────────
   var catLabels = <?= json_encode($catLabels) ?>;
