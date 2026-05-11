@@ -81,6 +81,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
     }
+    elseif ($action == 'edit_category') {
+        $categoryId = (int)($_POST['category_id'] ?? 0);
+        $name = trim($_POST['category_name'] ?? '');
+
+        if ($categoryId > 0 && $name) {
+            // Check if new name already exists (excluding current category)
+            $check = $conn->prepare("SELECT category_id FROM category WHERE category_name = ? AND category_id != ?");
+            $check->bind_param("si", $name, $categoryId);
+            $check->execute();
+            $result = $check->get_result();
+
+            if ($result->num_rows > 0) {
+                $_SESSION['toast'] = 'Category name already exists!';
+            } else {
+                $stmt = $conn->prepare("UPDATE category SET category_name = ? WHERE category_id = ?");
+                $stmt->bind_param("si", $name, $categoryId);
+                $stmt->execute();
+                $_SESSION['toast'] = 'Category updated!';
+            }
+        }
+    }
+    elseif ($action == 'delete_category') {
+        $categoryId = (int)($_POST['category_id'] ?? 0);
+
+        if ($categoryId > 0) {
+            // Check if *this user* has any products in this category
+            $check = $conn->prepare("SELECT COUNT(*) AS count FROM products WHERE category_id = ? AND user_id = ?");
+            $check->bind_param("ii", $categoryId, $userId);
+            $check->execute();
+            $result = $check->get_result()->fetch_assoc();
+
+            if ((int)$result['count'] > 0) {
+                $_SESSION['toast'] = 'Cannot delete: you still have products in this category!';
+            } else {
+                $stmt = $conn->prepare("DELETE FROM category WHERE category_id = ?");
+                $stmt->bind_param("i", $categoryId);
+                $stmt->execute();
+                $_SESSION['toast'] = 'Category deleted!';
+            }
+        }
+    }
 
     header('Location: products.php');
     exit;
@@ -93,15 +134,102 @@ if (isset($_SESSION['toast'])) {
     unset($_SESSION['toast']);
 }
 
-// ─── SELECT all products with category names ─────────────────────────────────
-$stmt = $conn->prepare("
-    SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity
-    FROM products p
-    JOIN category c ON p.category_id = c.category_id
-    WHERE p.user_id = ?
-    ORDER BY p.product_id ASC
-");
-$stmt->bind_param("i", $userId);
+// ─── PAGINATION & FILTER SETUP ─────────────────────────────────────────────
+$productsPerPage = 10;
+$currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$currentPage = max(1, $currentPage);
+
+// Read filters from query string (set by client-side code)
+$filterCategory = trim($_GET['category'] ?? '');
+$filterStatus   = trim($_GET['status']   ?? '');
+$filterSearch   = trim($_GET['search']   ?? '');
+
+// Build dynamic WHERE clause and bind params
+$whereClauses = [];
+$types = '';
+$values = [];
+
+// user id always required
+$whereClauses[] = 'p.user_id = ?';
+$types .= 'i';
+$values[] = $userId;
+
+if ($filterCategory !== '') {
+  $whereClauses[] = 'c.category_name = ?';
+  $types .= 's';
+  $values[] = $filterCategory;
+}
+
+if ($filterStatus !== '') {
+  if ($filterStatus === 'in-stock') {
+    $whereClauses[] = 'p.quantity >= ?';
+    $types .= 'i';
+    $values[] = LOW_STOCK_THRESHOLD;
+  } elseif ($filterStatus === 'low-stock') {
+    $whereClauses[] = 'p.quantity > 0 AND p.quantity < ?';
+    $types .= 'i';
+    $values[] = LOW_STOCK_THRESHOLD;
+  } elseif ($filterStatus === 'out-of-stock') {
+    $whereClauses[] = 'p.quantity = 0';
+    // no param
+  }
+}
+
+if ($filterSearch !== '') {
+  $whereClauses[] = '(p.product_name LIKE ? OR c.category_name LIKE ?)';
+  $types .= 'ss';
+  $like = '%' . $filterSearch . '%';
+  $values[] = $like;
+  $values[] = $like;
+}
+
+$whereSql = '';
+if (!empty($whereClauses)) {
+  $whereSql = 'WHERE ' . implode(' AND ', $whereClauses);
+}
+
+// Get total product count for this user with filters applied
+$countSql = "SELECT COUNT(*) AS total FROM products p JOIN category c ON p.category_id = c.category_id " . $whereSql;
+$countStmt = $conn->prepare($countSql);
+if ($countStmt === false) {
+  die('Prepare failed: ' . htmlspecialchars($conn->error));
+}
+if ($types !== '') {
+  // bind params dynamically
+  $bindParams = array_merge([$types], $values);
+  $refs = [];
+  foreach ($bindParams as $key => $val) $refs[$key] = &$bindParams[$key];
+  call_user_func_array([$countStmt, 'bind_param'], $refs);
+}
+$countStmt->execute();
+$countResult = $countStmt->get_result()->fetch_assoc();
+$totalProducts = (int)$countResult['total'];
+$totalPages = max(1, ceil($totalProducts / $productsPerPage));
+
+// Validate and clamp current page
+if ($currentPage > $totalPages) {
+  $currentPage = $totalPages;
+}
+
+$offset = ($currentPage - 1) * $productsPerPage;
+
+// ─── SELECT products with filters + pagination ─────────────────────────────
+$selectSql = "SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity FROM products p JOIN category c ON p.category_id = c.category_id " . $whereSql . " ORDER BY p.product_id ASC LIMIT ? OFFSET ?";
+$stmt = $conn->prepare($selectSql);
+if ($stmt === false) {
+  die('Prepare failed: ' . htmlspecialchars($conn->error));
+}
+
+// bind params for select: same filter params plus limit and offset
+$selectTypes = $types . 'ii';
+$selectValues = $values;
+$selectValues[] = $productsPerPage;
+$selectValues[] = $offset;
+
+$bindParams = array_merge([$selectTypes], $selectValues);
+$refs = [];
+foreach ($bindParams as $k => $v) $refs[$k] = &$bindParams[$k];
+call_user_func_array([$stmt, 'bind_param'], $refs);
 $stmt->execute();
 $products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -127,10 +255,27 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   <!-- Mobile Menu Overlay -->
   <div class="sidebar-overlay"></div>
 
-  <!-- Mobile Menu Toggle Button -->
-  <button class="mobile-menu-btn" title="Toggle menu">
-    <i class="bi bi-list"></i>
-  </button>
+  <!-- ===== MOBILE TOP BAR (mobile-only) ===== -->
+  <header class="mobile-top-bar">
+    <button class="mobile-menu-btn" title="Toggle menu" aria-controls="sidebar" aria-expanded="false">
+      <i class="bi bi-list" aria-hidden="true"></i>
+    </button>
+    <div class="mobile-top-bar-logo">
+      <div class="mobile-logo-emblem">
+        <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="35" cy="35" r="32" fill="none" stroke="#3d5a2d" stroke-width="1.5" stroke-dasharray="3 2.5"/>
+          <circle cx="35" cy="35" r="26" fill="none" stroke="#3d5a2d" stroke-width="1.5"/>
+          <circle cx="35" cy="5"  r="2.5" fill="#3d5a2d"/>
+          <circle cx="35" cy="65" r="2.5" fill="#3d5a2d"/>
+          <circle cx="5"  cy="35" r="2.5" fill="#3d5a2d"/>
+          <circle cx="65" cy="35" r="2.5" fill="#3d5a2d"/>
+          <text x="35" y="46" text-anchor="middle" font-size="26" font-weight="900"
+                fill="#3d5a2d" font-family="Georgia,serif">K</text>
+        </svg>
+      </div>
+      <div class="mobile-logo-text">KIM INVENTORIES</div>
+    </div>
+  </header>
 
   <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar">
@@ -169,9 +314,14 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     <div class="page-header-row">
     <h1 class="page-title">Products</h1>
 
-    <div style="display:flex; gap:10px;">
-      <button class="btn-primary-green" onclick="openCategoryModal()" style="background:#6c8f4e;">
+    <div style="display:flex; gap:10px; align-items:center;">
+      <button class="btn-primary-green btn-category" onclick="openCategoryModal()">
         <i class="bi bi-tags"></i> Add Category
+      </button>
+
+      <!-- Category Options Modal Button -->
+      <button class="btn-primary-green btn-category-opts" onclick="openCategoryOptionsModal()">
+        <i class="bi bi-sliders"></i> Category Options
       </button>
 
       <button class="btn-primary-green" onclick="openAddModal()">
@@ -203,6 +353,7 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 
     <!-- Products Table -->
     <div class="content-card" style="padding:0; overflow:hidden; border-radius:var(--radius-lg);">
+      <div class="products-table-wrapper">
       <table class="products-table" id="productsTable">
         <thead>
           <tr>
@@ -256,11 +407,65 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
           <?php endif; ?>
         </tbody>
       </table>
+      </div><!-- /.products-table-wrapper -->
     </div>
 
-    <!-- Row count -->
-    <div style="margin-top:12px; font-size:13px; color:var(--text-light); font-weight:600;">
-      Showing <span id="rowCount"><?= count($products) ?></span> product(s)
+    <!-- Row count and Pagination -->
+    <div style="margin-top:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+      <div style="font-size:13px; color:var(--text-light); font-weight:600;">
+        Showing <span id="rowCount"><?= count($products) ?></span> product(s)
+        <?php if ($totalPages > 1): ?>
+          — Page <?= $currentPage ?> of <?= $totalPages ?>
+        <?php endif; ?>
+      </div>
+
+      <?php if ($totalPages > 1): 
+        // Build query string while preserving existing GET parameters
+        $queryParams = $_GET;
+        unset($queryParams['page']);
+        $baseQuery = http_build_query($queryParams);
+        $separator = !empty($baseQuery) ? '&' : '?';
+      ?>
+      <!-- Pagination Controls -->
+      <nav>
+        <ul class="pagination pagination-sm mb-0" style="gap:4px;">
+          <!-- First Page Button -->
+          <li class="page-item <?= $currentPage === 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="<?= !empty($baseQuery) ? '?' . $baseQuery . '&page=1' : '?page=1' ?>" <?= $currentPage === 1 ? 'tabindex="-1" aria-disabled="true"' : '' ?> style="color:#587a42; border-color:#bfddaa;">
+              <i class="bi bi-skip-start"></i> First
+            </a>
+          </li>
+
+          <!-- Previous Page Button -->
+          <li class="page-item <?= $currentPage === 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="<?= !empty($baseQuery) ? '?' . $baseQuery . '&page=' . max(1, $currentPage - 1) : '?page=' . max(1, $currentPage - 1) ?>" <?= $currentPage === 1 ? 'tabindex="-1" aria-disabled="true"' : '' ?> style="color:#587a42; border-color:#bfddaa;">
+              <i class="bi bi-chevron-left"></i> Prev
+            </a>
+          </li>
+
+          <!-- Page Indicator -->
+          <li class="page-item disabled">
+            <span class="page-link" style="background:#587a42; color:white; border-color:#587a42; cursor:default;">
+              <?= $currentPage ?> / <?= $totalPages ?>
+            </span>
+          </li>
+
+          <!-- Next Page Button -->
+          <li class="page-item <?= $currentPage === $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="<?= !empty($baseQuery) ? '?' . $baseQuery . '&page=' . min($totalPages, $currentPage + 1) : '?page=' . min($totalPages, $currentPage + 1) ?>" <?= $currentPage === $totalPages ? 'tabindex="-1" aria-disabled="true"' : '' ?> style="color:#587a42; border-color:#bfddaa;">
+              Next <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+
+          <!-- Last Page Button -->
+          <li class="page-item <?= $currentPage === $totalPages ? 'disabled' : '' ?>">
+            <a class="page-link" href="<?= !empty($baseQuery) ? '?' . $baseQuery . '&page=' . $totalPages : '?page=' . $totalPages ?>" <?= $currentPage === $totalPages ? 'tabindex="-1" aria-disabled="true"' : '' ?> style="color:#587a42; border-color:#bfddaa;">
+              Last <i class="bi bi-skip-end"></i>
+            </a>
+          </li>
+        </ul>
+      </nav>
+      <?php endif; ?>
     </div>
 
   </main>
@@ -362,6 +567,73 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     </form>
   </div>
 </div>
+
+<!-- ===== EDIT CATEGORY MODAL ===== -->
+<div class="modal-overlay" id="editCategoryModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Edit Category</div>
+      <button class="modal-close" onclick="closeEditCategoryModal()">&times;</button>
+    </div>
+
+    <form class="modal-form" method="POST" action="products.php" novalidate>
+      <input type="hidden" name="action" value="edit_category">
+      <input type="hidden" name="category_id" id="editCategoryId" value="">
+
+      <div class="form-group">
+        <label for="editCatName">Category Name</label>
+        <input type="text" id="editCatName" name="category_name" placeholder="e.g. Drinks" required>
+      </div>
+
+      <div class="alert-msg alert-error" id="editCategoryError"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel-sm" onclick="closeEditCategoryModal()">Cancel</button>
+        <button type="submit" class="btn-primary-green" style="border-radius:var(--radius-sm);padding:9px 22px;">
+          Update Category
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== DELETE CATEGORY MODAL ===== -->
+<div class="modal-overlay" id="deleteCategoryModal">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title" style="color:#c62828;">Delete Category</div>
+      <button class="modal-close" onclick="closeDeleteCategoryModal()">&times;</button>
+    </div>
+    <p style="font-size:14px;color:var(--text-medium);margin-bottom:20px;">
+      Are you sure you want to delete <strong id="deleteCategoryName"></strong>?
+      This action cannot be undone.
+    </p>
+    <form method="POST" action="products.php">
+      <input type="hidden" name="action" value="delete_category" />
+      <input type="hidden" name="category_id" id="deleteCategoryId" value="" />
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel-sm" onclick="closeDeleteCategoryModal()">Cancel</button>
+        <button type="submit" class="btn-danger-sm" style="padding:9px 20px;font-size:13.5px;">
+          Yes, Delete
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== CATEGORY OPTIONS MODAL ===== -->
+<div class="modal-overlay" id="categoryOptionsModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Category Options</div>
+      <button class="modal-close" onclick="closeCategoryOptionsModal()">&times;</button>
+    </div>
+    <div id="categoryOptionsList" style="max-height: 400px; overflow-y: auto;">
+      <!-- Populated by JavaScript -->
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast-notif" id="toastNotif"></div>
 
@@ -395,7 +667,87 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     });
 
     document.getElementById('rowCount').textContent = visible;
+
+    // Persist current filters to the URL (without reloading) and update pagination links
+    updateQueryParamsInUrl({ category: catFilter, status: stFilter, search: search });
+    updatePaginationLinks();
   }
+
+  // Update the URL query string (no reload) to persist filters
+  function updateQueryParamsInUrl(params) {
+    const url = new URL(window.location);
+    if (params.category) url.searchParams.set('category', params.category);
+    else url.searchParams.delete('category');
+
+    if (params.status) url.searchParams.set('status', params.status);
+    else url.searchParams.delete('status');
+
+    if (params.search) url.searchParams.set('search', params.search);
+    else url.searchParams.delete('search');
+
+    history.replaceState({}, '', url);
+  }
+
+  // Ensure pagination links include current filter params
+  function updatePaginationLinks() {
+    const cat = document.getElementById('catFilter').value;
+    const st  = document.getElementById('statusFilter').value;
+    const anchors = document.querySelectorAll('.pagination a.page-link');
+    anchors.forEach(function(a) {
+      try {
+        const hrefUrl = new URL(a.href, window.location.origin);
+        if (cat) hrefUrl.searchParams.set('category', cat); else hrefUrl.searchParams.delete('category');
+        if (st)  hrefUrl.searchParams.set('status', st);  else hrefUrl.searchParams.delete('status');
+        // Use relative href so server receives query params correctly
+        a.href = hrefUrl.pathname + hrefUrl.search;
+      } catch (e) {
+        // ignore malformed hrefs
+      }
+    });
+  }
+
+  // When category or status changes, navigate to server with page=1 so pagination is recalculated
+  function navigateWithFilters() {
+    const params = new URLSearchParams(window.location.search);
+    const cat = document.getElementById('catFilter').value;
+    const st  = document.getElementById('statusFilter').value;
+    const s   = document.getElementById('searchInput').value;
+
+    if (cat) params.set('category', cat); else params.delete('category');
+    if (st)  params.set('status', st);  else params.delete('status');
+    if (s)   params.set('search', s);   else params.delete('search');
+
+    params.set('page', '1');
+    const url = window.location.pathname + '?' + params.toString();
+    window.location.href = url;
+  }
+
+  document.getElementById('catFilter').addEventListener('change', function() {
+    navigateWithFilters();
+  });
+  document.getElementById('statusFilter').addEventListener('change', function() {
+    navigateWithFilters();
+  });
+  // Keep live client-side search for quick filtering; server search on enter isn't implemented
+  document.getElementById('searchInput').addEventListener('input', function() {
+    filterTable();
+  });
+
+  // Initialize filters from URL on load and ensure pagination links are correct
+  document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const cat = params.get('category') || '';
+    const st  = params.get('status') || '';
+    const s   = params.get('search') || '';
+
+    if (cat) document.getElementById('catFilter').value = cat;
+    if (st)  document.getElementById('statusFilter').value = st;
+    if (s)   document.getElementById('searchInput').value = s;
+
+    // Apply client-side filter and update links to include these params
+    filterTable();
+    updatePaginationLinks();
+  });
 
   // ─── Add Modal ─────────────────────────────────────────────────────────────
   function openAddModal() {
@@ -477,6 +829,76 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     document.getElementById('categoryModal').classList.remove('active');
   }
 
+  // ─── Edit Category Modal ──────────────────────────────────────────────────────
+  function openEditCategoryModal(categoryId, categoryName) {
+    // Close the Category Options modal first so only one modal shows
+    document.getElementById('categoryOptionsModal').classList.remove('active');
+    document.getElementById('editCategoryId').value = categoryId;
+    document.getElementById('editCatName').value = categoryName;
+    document.getElementById('editCategoryError').style.display = 'none';
+    document.getElementById('editCategoryModal').classList.add('active');
+  }
+
+  function closeEditCategoryModal() {
+    document.getElementById('editCategoryModal').classList.remove('active');
+  }
+
+  // ─── Delete Category Modal ───────────────────────────────────────────────────
+  function openDeleteCategoryModal(categoryId, categoryName) {
+    // Close the Category Options modal first so only one modal shows
+    document.getElementById('categoryOptionsModal').classList.remove('active');
+    document.getElementById('deleteCategoryId').value = categoryId;
+    document.getElementById('deleteCategoryName').textContent = categoryName;
+    document.getElementById('deleteCategoryModal').classList.add('active');
+  }
+
+  function closeDeleteCategoryModal() {
+    document.getElementById('deleteCategoryModal').classList.remove('active');
+  }
+
+  // ─── Category Options Modal ───────────────────────────────────────────────
+  var allCategories = <?= json_encode($categories) ?>;
+
+  function openCategoryOptionsModal() {
+    renderCategoryOptionsModal();
+    document.getElementById('categoryOptionsModal').classList.add('active');
+  }
+
+  function closeCategoryOptionsModal() {
+    document.getElementById('categoryOptionsModal').classList.remove('active');
+  }
+
+  function renderCategoryOptionsModal() {
+    const listContainer = document.getElementById('categoryOptionsList');
+    let html = '';
+
+    if (allCategories.length === 0) {
+      html = '<div style="padding:20px; text-align:center; color:var(--text-light);">No categories yet. Create one to get started!</div>';
+    } else {
+      html = '<div style="display:flex; flex-direction:column; gap:0;">';
+      allCategories.forEach(function(cat, index) {
+        html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border-light); gap:12px;">' +
+          '<span style="font-size:15px; font-weight:500; flex:1; color:var(--text-dark);">' + htmlEscape(cat.category_name) + '</span>' +
+          '<div style="display:flex; gap:6px;">' +
+          '<button type="button" class="btn-edit" onclick="openEditCategoryModal(' + cat.category_id + ', \'' + htmlEscape(cat.category_name).replace(/'/g, "\\'") + '\'); return false;" title="Edit">' +
+          '<i class="bi bi-pencil"></i> Edit</button>' +
+          '<button type="button" class="btn-danger-sm" onclick="openDeleteCategoryModal(' + cat.category_id + ', \'' + htmlEscape(cat.category_name).replace(/'/g, "\\'") + '\'); return false;" title="Delete">' +
+          '<i class="bi bi-trash"></i> Delete</button>' +
+          '</div>' +
+          '</div>';
+      });
+      html += '</div>';
+    }
+
+    listContainer.innerHTML = html;
+  }
+
+  function htmlEscape(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   // Close modal on overlay click
   document.getElementById('productModal').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
@@ -486,6 +908,15 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   });
   document.getElementById('categoryModal').addEventListener('click', function(e) {
     if (e.target === this) closeCategoryModal();
+  });
+  document.getElementById('editCategoryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditCategoryModal();
+  });
+  document.getElementById('deleteCategoryModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDeleteCategoryModal();
+  });
+  document.getElementById('categoryOptionsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCategoryOptionsModal();
   });
 
   // ─── Show toast if redirected with message ─────────────────────────────────

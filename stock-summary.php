@@ -26,11 +26,12 @@ $lowStockCount = (int)$s['low_stock'];
 $outStockCount = (int)$s['out_of_stock'];
 $inStockPct    = $totalProducts > 0 ? round(($inStockCount / $totalProducts) * 100) : 0;
 
-// ─── SELECT category totals for bar chart ────────────────────────────────────
-$stmt = $conn->prepare("SELECT c.category_name, COALESCE(SUM(p.quantity),0) AS total_qty FROM category c LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ? GROUP BY c.category_id, c.category_name ORDER BY c.category_id");
+// ─── SELECT category totals for bar chart (filter empty categories) ─────────
+$stmt = $conn->prepare("SELECT c.category_name, COALESCE(SUM(p.quantity),0) AS total_qty FROM category c LEFT JOIN products p ON c.category_id = p.category_id AND p.user_id = ? GROUP BY c.category_id, c.category_name HAVING total_qty > 0 ORDER BY c.category_id");
 $stmt->bind_param("i", $userId);
 $stmt->execute();
 $categoryData = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$categoryCount = count($categoryData);
 
 $catLabels = [];
 $catValues = [];
@@ -60,13 +61,10 @@ foreach ($categoryData as $cd) {
   <div class="sidebar-overlay"></div>
 
   <!-- ===== MOBILE TOP BAR (mobile-only) ===== -->
-  <header class="mobile-top-bar d-flex align-items-center">
-    <div class="mobile-top-bar-spacer-left"></div>
-    <div class="mobile-top-bar-button-wrapper">
-      <button class="mobile-menu-btn" title="Toggle menu">
-        <i class="bi bi-list"></i>
-      </button>
-    </div>
+  <header class="mobile-top-bar">
+    <button class="mobile-menu-btn" title="Toggle menu">
+      <i class="bi bi-list"></i>
+    </button>
     <div class="mobile-top-bar-logo">
       <div class="mobile-logo-emblem">
         <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
@@ -114,14 +112,6 @@ foreach ($categoryData as $cd) {
     </div>
   </aside>
 
-  <!-- ===== MOBILE MENU BUTTON ===== -->
-  <button class="mobile-menu-btn" id="mobileMenuBtn">
-    <i class="bi bi-list"></i>
-  </button>
-
-  <!-- ===== MOBILE MENU OVERLAY ===== -->
-  <div class="sidebar-overlay"></div>
-
   <!-- ===== MAIN CONTENT ===== -->
   <main class="main-content">
 
@@ -154,8 +144,10 @@ foreach ($categoryData as $cd) {
         <!-- Bar Chart: Stock Overview -->
         <div>
           <div class="section-heading">Stock Overview</div>
-          <div class="chart-wrapper">
-            <canvas id="barChart"></canvas>
+          <div class="chart-scroll-container" data-category-count="<?= $categoryCount ?>">
+            <div class="chart-wrapper">
+              <canvas id="barChart"></canvas>
+            </div>
           </div>
         </div>
 
@@ -184,6 +176,14 @@ foreach ($categoryData as $cd) {
   // ─── Bar Chart: Stock by Category ─────────────────────────────────────────
   var catLabels = <?= json_encode($catLabels) ?>;
   var catValues = <?= json_encode($catValues) ?>;
+  var categoryCount = <?= $categoryCount ?>;
+
+  // Set chart container width for many categories
+  var chartContainer = document.querySelector('.chart-scroll-container .chart-wrapper');
+  if (categoryCount > 6) {
+    var minWidth = Math.max(600, categoryCount * 60);
+    chartContainer.style.width = minWidth + 'px';
+  }
 
   new Chart(document.getElementById('barChart'), {
     type: 'bar',
@@ -214,7 +214,9 @@ foreach ($categoryData as $cd) {
           grid: { display: false },
           ticks: {
             font: { family: "'Nunito', sans-serif", size: 12, weight: '600' },
-            color: '#4a5e40'
+            color: '#4a5e40',
+            maxRotation: 45,
+            minRotation: 0
           }
         },
         y: {

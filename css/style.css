@@ -94,9 +94,12 @@ a { text-decoration: none; color: inherit; }
   top: 0; left: 0;
   height: 100vh;
   padding: 28px 18px;
-  z-index: 100;
+  z-index: 105;
   flex-shrink: 0;
   transition: transform 0.3s ease;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* Mobile sidebar overlay */
@@ -105,7 +108,7 @@ a { text-decoration: none; color: inherit; }
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 99;
+  z-index: 104;
   animation: fadeIn 0.3s ease;
   pointer-events: none;
 }
@@ -220,13 +223,13 @@ a { text-decoration: none; color: inherit; }
   top: 0;
   left: 0;
   right: 0;
-  height: 60px;
+  height: 70px;
   background: var(--sidebar-bg);
   border-bottom: 1px solid rgba(60,90,40,0.1);
   z-index: 102;
   padding: 0 16px;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
   box-shadow: var(--shadow-sm);
 }
@@ -235,12 +238,11 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
 }
 
 .mobile-logo-emblem {
-  width: 40px;
-  height: 40px;
+  width: 45px;
+  height: 45px;
   flex-shrink: 0;
 }
 
@@ -298,6 +300,11 @@ a { text-decoration: none; color: inherit; }
 .mobile-menu-btn:active {
   transform: scale(0.95);
 }
+
+/* Button inside mobile top bar */
+.mobile-top-bar .mobile-menu-btn {
+  position: static;
+  margin: 0;
 }
 
 .page-title {
@@ -306,6 +313,7 @@ a { text-decoration: none; color: inherit; }
   color: var(--heading-color);
   margin-bottom: 28px;
   letter-spacing: -0.3px;
+  text-align: left ;
 }
 
 /* ============================================================
@@ -323,6 +331,8 @@ a { text-decoration: none; color: inherit; }
   border-radius: var(--radius-md);
   padding: 20px 22px;
   transition: box-shadow 0.2s ease;
+  min-width: 0;
+  word-break: break-word;
 }
 .stat-card:hover { box-shadow: var(--shadow-md); }
 .stat-label {
@@ -338,6 +348,8 @@ a { text-decoration: none; color: inherit; }
   color: var(--text-dark);
   line-height: 1;
   letter-spacing: -0.5px;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
 /* ============================================================
@@ -404,6 +416,14 @@ a { text-decoration: none; color: inherit; }
 }
 .btn-primary-green:hover { background: var(--primary-dark); color: var(--white); }
 
+/* Add Category button — slightly lighter green base, darkens on hover */
+.btn-category             { background: #6c8f4e; }
+.btn-category:hover       { background: #536e3b; }
+
+/* Category Options button — mid-tone green base, darkens on hover */
+.btn-category-opts        { background: #5a7641; }
+.btn-category-opts:hover  { background: #445930; }
+
 .btn-edit {
   background: #f0f0f0;
   color: #555;
@@ -465,6 +485,7 @@ a { text-decoration: none; color: inherit; }
 .products-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 520px; /* ensures all columns show; parent wrapper scrolls */
 }
 .products-table thead tr {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
@@ -486,6 +507,13 @@ a { text-decoration: none; color: inherit; }
 .products-table .product-name { font-weight: 700; }
 .products-table .product-price { font-weight: 700; color: var(--primary-dark); }
 .td-actions { display: flex; gap: 6px; align-items: center; }
+
+/* Products table scroll wrapper — always active so mobile can swipe */
+.products-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
 
 /* ============================================================
    SEARCH & FILTER BAR
@@ -1052,9 +1080,15 @@ a { text-decoration: none; color: inherit; }
   grid-template-columns: 1.6fr 1fr;
   gap: 22px;
   margin-top: 4px;
+  min-width: 0;
 }
 
-.recent-table { width: 100%; border-collapse: collapse; }
+.dashboard-grid > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.recent-table { width: 100%; border-collapse: collapse; min-width: 0; }
 .recent-table th {
   text-align: left;
   padding: 9px 12px;
@@ -1128,9 +1162,17 @@ a { text-decoration: none; color: inherit; }
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 22px;
+  min-width: 0;
 }
-.chart-wrapper { position: relative; height: 260px; }
-.donut-wrapper  { position: relative; height: 220px; }
+.chart-grid > * { min-width: 0; }
+.chart-scroll-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  min-width: 0;
+}
+.chart-wrapper { position: relative; height: 260px; min-height: 180px; }
+.donut-wrapper  { position: relative; height: 220px; min-height: 180px; }
 
 .donut-legend { margin-top: 16px; }
 .legend-item {
@@ -1209,7 +1251,7 @@ a { text-decoration: none; color: inherit; }
 
   .main-content {
     margin-left: 0;
-    margin-top: 60px;
+    margin-top: 70px;
     padding: 24px 24px 40px 24px;
   }
 
@@ -1220,6 +1262,7 @@ a { text-decoration: none; color: inherit; }
   .page-title {
     font-size: 24px;
     margin-top: 8px;
+    text-align: left;
   }
 
   .stat-cards {
@@ -1233,10 +1276,27 @@ a { text-decoration: none; color: inherit; }
 
   .chart-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .chart-wrapper {
+    height: 220px;
+  }
+
+  .donut-wrapper {
+    height: 200px;
   }
 
   .content-card {
     padding: 20px 16px;
+    overflow-x: auto;
+  }
+
+  /* Products table: parent scrolls, table keeps min-width */
+  .products-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-lg);
   }
 
   .products-table thead,
@@ -1269,7 +1329,13 @@ a { text-decoration: none; color: inherit; }
 
   .page-header-row {
     flex-direction: column;
+    align-items: flex-start;
     gap: 8px;
+  }
+
+  .page-header-row .page-title {
+    text-align: left !important;
+    width: 100%;
   }
 
   .filter-bar {
@@ -1280,12 +1346,17 @@ a { text-decoration: none; color: inherit; }
   .filter-select {
     width: 100% !important;
   }
+
+  /* Dashboard table scroll on tablet */
+  .content-card-solid {
+    overflow-x: auto;
+  }
 }
 
 /* Mobile devices (480px and below) */
 @media (max-width: 480px) {
   :root {
-    --sidebar-width: 100%;
+    --sidebar-width: 280px;
   }
 
   body {
@@ -1297,33 +1368,73 @@ a { text-decoration: none; color: inherit; }
   }
 
   .sidebar {
-    width: 100%;
-    max-width: 280px;
+    width: 280px;
+    max-width: 90vw;
     padding: 20px 12px;
     box-shadow: var(--shadow-lg);
   }
 
   .main-content {
-    margin-top: 60px;
+    margin-top: 70px;
     padding: 16px 16px 40px 16px;
   }
 
   .page-title {
     font-size: 20px;
     margin-bottom: 16px;
+    text-align: left !important;
   }
 
-  .stat-cards {
+  .page-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .page-header-row .page-title {
+    text-align: left !important;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  /* Dashboard grid stacks on small screens */
+  .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Charts stack and shrink gracefully */
+  .chart-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .chart-wrapper {
+    height: 200px;
+    min-height: 160px;
+  }
+
+  .donut-wrapper {
+    height: 180px;
+    min-height: 150px;
+  }
+
+  /* Recent table scrolls horizontally instead of breaking */
+  .content-card-solid {
+    overflow-x: auto;
+  }
+
+  /* Stat cards: 2 columns on phones, readable sizing */
+  .stat-cards {
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
   }
 
   .stat-card {
-    padding: 16px 14px;
+    padding: 14px 12px;
   }
 
   .stat-value {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .stat-label {
@@ -1337,6 +1448,7 @@ a { text-decoration: none; color: inherit; }
 
   .content-card-solid {
     padding: 16px 12px;
+    overflow-x: auto;
   }
 
   .products-table {
@@ -1418,11 +1530,7 @@ a { text-decoration: none; color: inherit; }
     font-size: 13px;
   }
 
-  /* Hide some columns on very small screens */
-  .products-table .product-price,
-  .recent-table .product-price {
-    display: none;
-  }
+  /* All columns remain visible on small screens */
 
   .filter-bar {
     gap: 6px;
@@ -1489,19 +1597,60 @@ a { text-decoration: none; color: inherit; }
   .page-title {
     font-size: 18px;
     margin-bottom: 12px;
+    text-align: left !important;
+  }
+
+  .page-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .page-header-row .page-title {
+    text-align: left !important;
+    width: 100%;
+  }
+
+  /* Single-column stat cards on the narrowest screens */
+  .stat-cards {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px 10px;
   }
 
   .stat-value {
-    font-size: 20px;
+    font-size: 18px;
+  }
+
+  .stat-label {
+    font-size: 10px;
   }
 
   .modal-box {
-    max-width: 90%;
+    max-width: 92%;
+    padding: 20px 16px;
   }
 
   .btn-primary-green {
     width: 100%;
     justify-content: center;
+  }
+
+  .content-card-solid {
+    overflow-x: auto;
+  }
+
+  .chart-wrapper {
+    height: 170px;
+    min-height: 140px;
+  }
+
+  .donut-wrapper {
+    height: 160px;
+    min-height: 130px;
   }
 }
 

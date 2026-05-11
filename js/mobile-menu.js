@@ -7,6 +7,7 @@ function initMobileMenu() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.querySelector('.sidebar-overlay');
   const menuBtn = document.querySelector('.mobile-menu-btn');
+  const menuIcon = menuBtn ? menuBtn.querySelector('i') : null;
   
   if (!sidebar || !overlay || !menuBtn) return;
   
@@ -15,7 +16,14 @@ function initMobileMenu() {
     e.stopPropagation();
     const isOpen = sidebar.classList.toggle('active');
     overlay.classList.toggle('active');
-    
+
+    // update ARIA and icon
+    menuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    if (menuIcon) {
+      menuIcon.classList.toggle('bi-list', !isOpen);
+      menuIcon.classList.toggle('bi-x', isOpen);
+    }
+
     if (isOpen) {
       overlay.style.pointerEvents = 'auto';
       document.body.style.overflow = 'hidden';
@@ -48,24 +56,32 @@ function initMobileMenu() {
 function openMobileMenu() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.querySelector('.sidebar-overlay');
-  
+  const menuBtn = document.querySelector('.mobile-menu-btn');
+  const menuIcon = menuBtn ? menuBtn.querySelector('i') : null;
+
   if (sidebar) sidebar.classList.add('active');
   if (overlay) {
     overlay.classList.add('active');
     overlay.style.pointerEvents = 'auto';
   }
+  if (menuBtn) menuBtn.setAttribute('aria-expanded', 'true');
+  if (menuIcon) { menuIcon.classList.remove('bi-list'); menuIcon.classList.add('bi-x'); }
   document.body.style.overflow = 'hidden';
 }
 
 function closeMobileMenu() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.querySelector('.sidebar-overlay');
-  
+  const menuBtn = document.querySelector('.mobile-menu-btn');
+  const menuIcon = menuBtn ? menuBtn.querySelector('i') : null;
+
   if (sidebar) sidebar.classList.remove('active');
   if (overlay) {
     overlay.classList.remove('active');
     overlay.style.pointerEvents = 'none';
   }
+  if (menuBtn) menuBtn.setAttribute('aria-expanded', 'false');
+  if (menuIcon) { menuIcon.classList.remove('bi-x'); menuIcon.classList.add('bi-list'); }
   document.body.style.overflow = 'auto';
 }
 

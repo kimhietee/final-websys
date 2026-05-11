@@ -119,13 +119,10 @@ $createdAt    = $user['created_at'] ? date('F j, Y', strtotime($user['created_at
   <div class="sidebar-overlay"></div>
 
   <!-- ===== MOBILE TOP BAR (mobile-only) ===== -->
-  <header class="mobile-top-bar d-flex align-items-center">
-    <div class="mobile-top-bar-spacer-left"></div>
-    <div class="mobile-top-bar-button-wrapper">
-      <button class="mobile-menu-btn" title="Toggle menu">
-        <i class="bi bi-list"></i>
-      </button>
-    </div>
+  <header class="mobile-top-bar">
+    <button class="mobile-menu-btn" title="Toggle menu">
+      <i class="bi bi-list"></i>
+    </button>
     <div class="mobile-top-bar-logo">
       <div class="mobile-logo-emblem">
         <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
