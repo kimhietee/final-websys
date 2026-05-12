@@ -134,104 +134,55 @@ if (isset($_SESSION['toast'])) {
     unset($_SESSION['toast']);
 }
 
-// ─── PAGINATION & FILTER SETUP ─────────────────────────────────────────────
+// ─── PAGINATION SETUP ───────────────────────────────────────────────────────
 $productsPerPage = 10;
 $currentPage = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$currentPage = max(1, $currentPage);
+$currentPage = max(1, $currentPage);  // Ensure page is at least 1
 
-// Read filters from query string (set by client-side code)
-$filterCategory = trim($_GET['category'] ?? '');
-$filterStatus   = trim($_GET['status']   ?? '');
-$filterSearch   = trim($_GET['search']   ?? '');
-
-// Build dynamic WHERE clause and bind params
-$whereClauses = [];
-$types = '';
-$values = [];
-
-// user id always required
-$whereClauses[] = 'p.user_id = ?';
-$types .= 'i';
-$values[] = $userId;
-
-if ($filterCategory !== '') {
-  $whereClauses[] = 'c.category_name = ?';
-  $types .= 's';
-  $values[] = $filterCategory;
-}
-
-if ($filterStatus !== '') {
-  if ($filterStatus === 'in-stock') {
-    $whereClauses[] = 'p.quantity >= ?';
-    $types .= 'i';
-    $values[] = LOW_STOCK_THRESHOLD;
-  } elseif ($filterStatus === 'low-stock') {
-    $whereClauses[] = 'p.quantity > 0 AND p.quantity < ?';
-    $types .= 'i';
-    $values[] = LOW_STOCK_THRESHOLD;
-  } elseif ($filterStatus === 'out-of-stock') {
-    $whereClauses[] = 'p.quantity = 0';
-    // no param
-  }
-}
-
-if ($filterSearch !== '') {
-  $whereClauses[] = '(p.product_name LIKE ? OR c.category_name LIKE ?)';
-  $types .= 'ss';
-  $like = '%' . $filterSearch . '%';
-  $values[] = $like;
-  $values[] = $like;
-}
-
-$whereSql = '';
-if (!empty($whereClauses)) {
-  $whereSql = 'WHERE ' . implode(' AND ', $whereClauses);
-}
-
-// Get total product count for this user with filters applied
-$countSql = "SELECT COUNT(*) AS total FROM products p JOIN category c ON p.category_id = c.category_id " . $whereSql;
-$countStmt = $conn->prepare($countSql);
-if ($countStmt === false) {
-  die('Prepare failed: ' . htmlspecialchars($conn->error));
-}
-if ($types !== '') {
-  // bind params dynamically
-  $bindParams = array_merge([$types], $values);
-  $refs = [];
-  foreach ($bindParams as $key => $val) $refs[$key] = &$bindParams[$key];
-  call_user_func_array([$countStmt, 'bind_param'], $refs);
-}
+// Get total product count for this user
+$countStmt = $conn->prepare("
+    SELECT COUNT(*) AS total
+    FROM products p
+    JOIN category c ON p.category_id = c.category_id
+    WHERE p.user_id = ?
+");
+$countStmt->bind_param("i", $userId);
 $countStmt->execute();
 $countResult = $countStmt->get_result()->fetch_assoc();
 $totalProducts = (int)$countResult['total'];
 $totalPages = max(1, ceil($totalProducts / $productsPerPage));
 
-// Validate and clamp current page
+// Validate current page
 if ($currentPage > $totalPages) {
-  $currentPage = $totalPages;
+    $currentPage = $totalPages;
 }
 
 $offset = ($currentPage - 1) * $productsPerPage;
 
-// ─── SELECT products with filters + pagination ─────────────────────────────
-$selectSql = "SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity FROM products p JOIN category c ON p.category_id = c.category_id " . $whereSql . " ORDER BY p.product_id ASC LIMIT ? OFFSET ?";
-$stmt = $conn->prepare($selectSql);
-if ($stmt === false) {
-  die('Prepare failed: ' . htmlspecialchars($conn->error));
-}
-
-// bind params for select: same filter params plus limit and offset
-$selectTypes = $types . 'ii';
-$selectValues = $values;
-$selectValues[] = $productsPerPage;
-$selectValues[] = $offset;
-
-$bindParams = array_merge([$selectTypes], $selectValues);
-$refs = [];
-foreach ($bindParams as $k => $v) $refs[$k] = &$bindParams[$k];
-call_user_func_array([$stmt, 'bind_param'], $refs);
+// ─── SELECT paginated products (for the default table view) ────────────────
+$stmt = $conn->prepare("
+    SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity
+    FROM products p
+    JOIN category c ON p.category_id = c.category_id
+    WHERE p.user_id = ?
+    ORDER BY p.product_id ASC
+    LIMIT ? OFFSET ?
+");
+$stmt->bind_param("iii", $userId, $productsPerPage, $offset);
 $stmt->execute();
 $products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// ─── SELECT ALL products for client-side search (no LIMIT) ──────────────────
+$allStmt = $conn->prepare("
+    SELECT p.product_id, p.product_name, c.category_name, c.category_id, p.price, p.quantity
+    FROM products p
+    JOIN category c ON p.category_id = c.category_id
+    WHERE p.user_id = ?
+    ORDER BY p.product_id ASC
+");
+$allStmt->bind_param("i", $userId);
+$allStmt->execute();
+$allProducts = $allStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // ─── SELECT all categories for dropdown ──────────────────────────────────────
 $result = $conn->query("SELECT category_id, category_name FROM category ORDER BY category_id");
@@ -257,8 +208,8 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 
   <!-- ===== MOBILE TOP BAR (mobile-only) ===== -->
   <header class="mobile-top-bar">
-    <button class="mobile-menu-btn" title="Toggle menu" aria-controls="sidebar" aria-expanded="false">
-      <i class="bi bi-list" aria-hidden="true"></i>
+    <button class="mobile-menu-btn" title="Toggle menu">
+      <i class="bi bi-list"></i>
     </button>
     <div class="mobile-top-bar-logo">
       <div class="mobile-logo-emblem">
@@ -413,10 +364,15 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
     <!-- Row count and Pagination -->
     <div style="margin-top:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
       <div style="font-size:13px; color:var(--text-light); font-weight:600;">
-        Showing <span id="rowCount"><?= count($products) ?></span> product(s)
-        <?php if ($totalPages > 1): ?>
-          — Page <?= $currentPage ?> of <?= $totalPages ?>
-        <?php endif; ?>
+        <span id="rowCountLabel">
+          Showing <span id="rowCount"><?= count($products) ?></span> product(s)
+          <?php if ($totalPages > 1): ?>
+            — Page <?= $currentPage ?> of <?= $totalPages ?>
+          <?php endif; ?>
+        </span>
+        <span id="searchModeLabel" style="display:none;">
+          Found <span id="searchRowCount">0</span> matching product(s) — search results
+        </span>
       </div>
 
       <?php if ($totalPages > 1): 
@@ -427,7 +383,7 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
         $separator = !empty($baseQuery) ? '&' : '?';
       ?>
       <!-- Pagination Controls -->
-      <nav>
+      <nav id="paginationControls">
         <ul class="pagination pagination-sm mb-0" style="gap:4px;">
           <!-- First Page Button -->
           <li class="page-item <?= $currentPage === 1 ? 'disabled' : '' ?>">
@@ -641,113 +597,107 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
 <script src="js/auth.js"></script>
 <script src="js/mobile-menu.js"></script>
 <script>
-  // ─── Client-side filter (no page reload) ───────────────────────────────────
+  // ─── Full product dataset for client-side search ────────────────────────────
+  var ALL_PRODUCTS = <?= json_encode(array_map(function($p) {
+    $qty = (int)$p['quantity'];
+    if ($qty === 0)                         { $status = 'out-of-stock'; $badgeCls = 'badge-out-stock';  $badgeTxt = 'Out of Stock'; }
+    elseif ($qty < LOW_STOCK_THRESHOLD)     { $status = 'low-stock';   $badgeCls = 'badge-low-stock'; $badgeTxt = 'Low Stock'; }
+    else                                    { $status = 'in-stock';    $badgeCls = 'badge-in-stock';  $badgeTxt = 'In Stock'; }
+    return [
+      'product_id'    => $p['product_id'],
+      'product_name'  => $p['product_name'],
+      'category_name' => $p['category_name'],
+      'category_id'   => $p['category_id'],
+      'price'         => $p['price'],
+      'quantity'      => $qty,
+      'status'        => $status,
+      'badge_cls'     => $badgeCls,
+      'badge_txt'     => $badgeTxt,
+    ];
+  }, $allProducts)) ?>;
+
+  // Store the original server-rendered tbody HTML so we can restore it
+  var _originalTbodyHTML = document.getElementById('productsTbody').innerHTML;
+  var _isSearchMode = false;
+
+  // ─── Client-side filter ──────────────────────────────────────────────────────
   function filterTable() {
-    const search    = document.getElementById('searchInput').value.toLowerCase();
+    const search    = document.getElementById('searchInput').value.trim().toLowerCase();
     const catFilter = document.getElementById('catFilter').value;
     const stFilter  = document.getElementById('statusFilter').value;
-    const rows      = document.querySelectorAll('#productsTbody tr[data-name]');
-    let visible = 0;
 
-    rows.forEach(function(row) {
-      const name     = row.getAttribute('data-name');
-      const category = row.getAttribute('data-category');
-      const status   = row.getAttribute('data-status');
+    const isFiltering = search !== '' || catFilter !== '' || stFilter !== '';
 
-      const matchSearch = name.includes(search) || category.toLowerCase().includes(search);
-      const matchCat    = !catFilter  || category === catFilter;
-      const matchStatus = !stFilter   || status === stFilter;
+    if (isFiltering) {
+      // ── SEARCH MODE: render matching rows from full dataset ──
+      _isSearchMode = true;
 
-      if (matchSearch && matchCat && matchStatus) {
-        row.style.display = '';
-        visible++;
+      // Hide pagination
+      var pag = document.getElementById('paginationControls');
+      if (pag) pag.style.display = 'none';
+
+      // Show search-mode label, hide default label
+      document.getElementById('rowCountLabel').style.display = 'none';
+      document.getElementById('searchModeLabel').style.display = '';
+
+      // Filter the full dataset
+      var matches = ALL_PRODUCTS.filter(function(p) {
+        var nameLower = p.product_name.toLowerCase();
+        var catLower  = p.category_name.toLowerCase();
+        var matchSearch = !search || nameLower.startsWith(search);
+        var matchCat    = !catFilter || p.category_name === catFilter;
+        var matchStatus = !stFilter  || p.status === stFilter;
+        return matchSearch && matchCat && matchStatus;
+      });
+
+      document.getElementById('searchRowCount').textContent = matches.length;
+
+      // Build table rows
+      var html = '';
+      if (matches.length === 0) {
+        html = '<tr class="no-results"><td colspan="7">No products match your search.</td></tr>';
       } else {
-        row.style.display = 'none';
+        matches.forEach(function(p, i) {
+          var name    = p.product_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          var catName = p.category_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          var price   = '₱' + Number(p.price).toLocaleString('en-PH', {maximumFractionDigits:0});
+          var editData = JSON.stringify({id:p.product_id, name:p.product_name, category_id:p.category_id, price:p.price, quantity:p.quantity}).replace(/'/g,"\\'");
+          var delName  = p.product_name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+          html +=
+            '<tr data-name="' + p.product_name.toLowerCase() + '" data-category="' + p.category_name + '" data-status="' + p.status + '">' +
+            '<td style="color:var(--text-light);font-weight:700;">' + (i+1) + '</td>' +
+            '<td class="product-name">' + name + '</td>' +
+            '<td>' + catName + '</td>' +
+            '<td class="product-price">' + price + '</td>' +
+            '<td>' + p.quantity + '</td>' +
+            '<td><span class="badge-status ' + p.badge_cls + '">' + p.badge_txt + '</span></td>' +
+            '<td><div class="td-actions">' +
+              '<button class="btn-edit" onclick=\'openEditModal(' + editData + ')\'><i class="bi bi-pencil"></i> Edit</button>' +
+              '<button class="btn-danger-sm" onclick="openDeleteModal(' + p.product_id + ', \'' + delName + '\')">' +
+                '<i class="bi bi-trash"></i>' +
+              '</button>' +
+            '</div></td>' +
+            '</tr>';
+        });
       }
-    });
+      document.getElementById('productsTbody').innerHTML = html;
 
-    document.getElementById('rowCount').textContent = visible;
-
-    // Persist current filters to the URL (without reloading) and update pagination links
-    updateQueryParamsInUrl({ category: catFilter, status: stFilter, search: search });
-    updatePaginationLinks();
-  }
-
-  // Update the URL query string (no reload) to persist filters
-  function updateQueryParamsInUrl(params) {
-    const url = new URL(window.location);
-    if (params.category) url.searchParams.set('category', params.category);
-    else url.searchParams.delete('category');
-
-    if (params.status) url.searchParams.set('status', params.status);
-    else url.searchParams.delete('status');
-
-    if (params.search) url.searchParams.set('search', params.search);
-    else url.searchParams.delete('search');
-
-    history.replaceState({}, '', url);
-  }
-
-  // Ensure pagination links include current filter params
-  function updatePaginationLinks() {
-    const cat = document.getElementById('catFilter').value;
-    const st  = document.getElementById('statusFilter').value;
-    const anchors = document.querySelectorAll('.pagination a.page-link');
-    anchors.forEach(function(a) {
-      try {
-        const hrefUrl = new URL(a.href, window.location.origin);
-        if (cat) hrefUrl.searchParams.set('category', cat); else hrefUrl.searchParams.delete('category');
-        if (st)  hrefUrl.searchParams.set('status', st);  else hrefUrl.searchParams.delete('status');
-        // Use relative href so server receives query params correctly
-        a.href = hrefUrl.pathname + hrefUrl.search;
-      } catch (e) {
-        // ignore malformed hrefs
+    } else {
+      // ── BROWSE MODE: restore original paginated rows ──
+      if (_isSearchMode) {
+        _isSearchMode = false;
+        document.getElementById('productsTbody').innerHTML = _originalTbodyHTML;
       }
-    });
+
+      // Show pagination again
+      var pag = document.getElementById('paginationControls');
+      if (pag) pag.style.display = '';
+
+      // Restore default label
+      document.getElementById('rowCountLabel').style.display = '';
+      document.getElementById('searchModeLabel').style.display = 'none';
+    }
   }
-
-  // When category or status changes, navigate to server with page=1 so pagination is recalculated
-  function navigateWithFilters() {
-    const params = new URLSearchParams(window.location.search);
-    const cat = document.getElementById('catFilter').value;
-    const st  = document.getElementById('statusFilter').value;
-    const s   = document.getElementById('searchInput').value;
-
-    if (cat) params.set('category', cat); else params.delete('category');
-    if (st)  params.set('status', st);  else params.delete('status');
-    if (s)   params.set('search', s);   else params.delete('search');
-
-    params.set('page', '1');
-    const url = window.location.pathname + '?' + params.toString();
-    window.location.href = url;
-  }
-
-  document.getElementById('catFilter').addEventListener('change', function() {
-    navigateWithFilters();
-  });
-  document.getElementById('statusFilter').addEventListener('change', function() {
-    navigateWithFilters();
-  });
-  // Keep live client-side search for quick filtering; server search on enter isn't implemented
-  document.getElementById('searchInput').addEventListener('input', function() {
-    filterTable();
-  });
-
-  // Initialize filters from URL on load and ensure pagination links are correct
-  document.addEventListener('DOMContentLoaded', function() {
-    const params = new URLSearchParams(window.location.search);
-    const cat = params.get('category') || '';
-    const st  = params.get('status') || '';
-    const s   = params.get('search') || '';
-
-    if (cat) document.getElementById('catFilter').value = cat;
-    if (st)  document.getElementById('statusFilter').value = st;
-    if (s)   document.getElementById('searchInput').value = s;
-
-    // Apply client-side filter and update links to include these params
-    filterTable();
-    updatePaginationLinks();
-  });
 
   // ─── Add Modal ─────────────────────────────────────────────────────────────
   function openAddModal() {
