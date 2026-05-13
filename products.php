@@ -308,12 +308,12 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
       <table class="products-table" id="productsTable">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Product Name</th>
-            <th>Category</th>
-            <th>Unit Price</th>
-            <th>Quantity</th>
-            <th>Status</th>
+            <th class="sortable-header" data-sort="product_id" title="Click to sort">#<span class="sort-indicator"></span></th>
+            <th class="sortable-header" data-sort="product_name" title="Click to sort">Product Name<span class="sort-indicator"></span></th>
+            <th class="sortable-header" data-sort="category_name" title="Click to sort">Category<span class="sort-indicator"></span></th>
+            <th class="sortable-header" data-sort="price" title="Click to sort">Unit Price<span class="sort-indicator"></span></th>
+            <th class="sortable-header" data-sort="quantity" title="Click to sort">Quantity<span class="sort-indicator"></span></th>
+            <th class="sortable-header" data-sort="status" title="Click to sort">Status<span class="sort-indicator"></span></th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -619,6 +619,101 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   // Store the original server-rendered tbody HTML so we can restore it
   var _originalTbodyHTML = document.getElementById('productsTbody').innerHTML;
   var _isSearchMode = false;
+  var _currentSort = { column: null, direction: 'asc' };  // Track current sort state
+
+  // ─── Sorting state and logic ──────────────────────────────────────────────────
+  function sortProducts(column) {
+    // Toggle sort direction if same column is clicked
+    if (_currentSort.column === column) {
+      _currentSort.direction = _currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      _currentSort.column = column;
+      _currentSort.direction = 'asc';
+    }
+
+    // Sort ALL_PRODUCTS
+    ALL_PRODUCTS.sort(function(a, b) {
+      var aVal = a[column];
+      var bVal = b[column];
+
+      // Handle numeric comparisons
+      if (column === 'product_id' || column === 'price' || column === 'quantity') {
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+        return _currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      // Handle string comparisons (case-insensitive)
+      aVal = String(aVal).toLowerCase();
+      bVal = String(bVal).toLowerCase();
+      if (aVal < bVal) return _currentSort.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return _currentSort.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // Update sort indicator in headers
+    updateSortIndicators();
+
+    // Re-render table with sorted data
+    if (_isSearchMode) {
+      // If in search mode, re-apply filters on sorted data
+      filterTable();
+    } else {
+      // Otherwise, render all products (paginated view)
+      renderSortedProducts();
+    }
+  }
+
+  function updateSortIndicators() {
+    // Clear all indicators
+    document.querySelectorAll('.sort-indicator').forEach(function(el) {
+      el.textContent = '';
+      el.className = 'sort-indicator';
+    });
+
+    // Add indicator to current sort column
+    if (_currentSort.column) {
+      var header = document.querySelector('[data-sort="' + _currentSort.column + '"]');
+      if (header) {
+        var indicator = header.querySelector('.sort-indicator');
+        if (indicator) {
+          indicator.textContent = _currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+          indicator.className = 'sort-indicator active';
+        }
+      }
+    }
+  }
+
+  function renderSortedProducts() {
+    var html = '';
+    if (ALL_PRODUCTS.length === 0) {
+      html = '<tr class="no-results"><td colspan="7">No products found.</td></tr>';
+    } else {
+      ALL_PRODUCTS.forEach(function(p, i) {
+        var name = p.product_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        var catName = p.category_name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        var price = '₱' + Number(p.price).toLocaleString('en-PH', {maximumFractionDigits:0});
+        var editData = JSON.stringify({id:p.product_id, name:p.product_name, category_id:p.category_id, price:p.price, quantity:p.quantity}).replace(/'/g,"\\'");
+        var delName = p.product_name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        html +=
+          '<tr data-name="' + p.product_name.toLowerCase() + '" data-category="' + p.category_name + '" data-status="' + p.status + '">' +
+          '<td style="color:var(--text-light);font-weight:700;">' + (i+1) + '</td>' +
+          '<td class="product-name">' + name + '</td>' +
+          '<td>' + catName + '</td>' +
+          '<td class="product-price">' + price + '</td>' +
+          '<td>' + p.quantity + '</td>' +
+          '<td><span class="badge-status ' + p.badge_cls + '">' + p.badge_txt + '</span></td>' +
+          '<td><div class="td-actions">' +
+            '<button class="btn-edit" onclick=\'openEditModal(' + editData + ')\'><i class="bi bi-pencil"></i> Edit</button>' +
+            '<button class="btn-danger-sm" onclick="openDeleteModal(' + p.product_id + ', \'' + delName + '\')">' +
+              '<i class="bi bi-trash"></i>' +
+            '</button>' +
+          '</div></td>' +
+          '</tr>';
+      });
+    }
+    document.getElementById('productsTbody').innerHTML = html;
+  }
 
   // ─── Client-side filter ──────────────────────────────────────────────────────
   function filterTable() {
@@ -640,7 +735,7 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
       document.getElementById('rowCountLabel').style.display = 'none';
       document.getElementById('searchModeLabel').style.display = '';
 
-      // Filter the full dataset
+      // Filter the sorted dataset
       var matches = ALL_PRODUCTS.filter(function(p) {
         var nameLower = p.product_name.toLowerCase();
         var catLower  = p.category_name.toLowerCase();
@@ -867,6 +962,14 @@ $categories = $result->fetch_all(MYSQLI_ASSOC);
   });
   document.getElementById('categoryOptionsModal').addEventListener('click', function(e) {
     if (e.target === this) closeCategoryOptionsModal();
+  });
+
+  // ─── Sortable Header Click Handlers ────────────────────────────────────────
+  document.querySelectorAll('.sortable-header').forEach(function(header) {
+    header.addEventListener('click', function() {
+      var column = this.getAttribute('data-sort');
+      sortProducts(column);
+    });
   });
 
   // ─── Show toast if redirected with message ─────────────────────────────────

@@ -496,6 +496,25 @@ a { text-decoration: none; color: inherit; }
   color: white !important;
   border: none !important;
 }
+.products-table thead th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+.products-table thead th.sortable-header:hover {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, #2d4a1e 100%) !important;
+  filter: brightness(1.1);
+}
+.sort-indicator {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 12px;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+.sort-indicator.active {
+  opacity: 1;
+}
 .products-table td {
   padding: 13px 14px;
   font-size: 14px;
